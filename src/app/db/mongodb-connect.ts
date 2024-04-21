@@ -11,7 +11,9 @@ interface DbConfig {
 
 // Load configuration from environment variables
 const loadConfig = (): DbConfig => {
-  const uri = process.env.MONGO_URI;
+  const uri =
+    process.env.MONGO_URI ||
+    "mongodb+srv://admin:admin123@expenses-wallet.8ewvkfz.mongodb.net/?retryWrites=true&w=majority&appName=Expenses-Wallet";
   if (!uri) {
     throw new Error("MONGO_URI must be defined in environment variables");
   }
