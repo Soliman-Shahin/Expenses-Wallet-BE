@@ -13,7 +13,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: "/v1/user/auth/google/callback",
+      callbackURL: process.env.GOOGLE_CALLBACK_URL!,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -47,7 +47,7 @@ passport.use(
     {
       clientID: process.env.FACEBOOK_CLIENT_ID!,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET!,
-      callbackURL: "/v1/user/auth/facebook/callback",
+      callbackURL: process.env.FACEBOOK_CALLBACK_URL!,
       profileFields: ["id", "displayName", "email", "picture.type(large)"],
     },
     async (accessToken, refreshToken, profile, done) => {
