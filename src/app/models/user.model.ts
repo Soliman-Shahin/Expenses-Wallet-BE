@@ -33,6 +33,7 @@ interface IUserDocument extends Document {
   password: string;
   username?: string;
   image?: string;
+  emailVerified?: boolean;
   sessions: IUserSession[];
 }
 
@@ -65,6 +66,7 @@ const UserSchema = new Schema<IUserDocument>(
     password: { type: String, required: true, minlength: 8 },
     username: String,
     image: String,
+    emailVerified: Boolean,
     sessions: [
       {
         token: { type: String, required: true },
