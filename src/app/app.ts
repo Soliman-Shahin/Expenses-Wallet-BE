@@ -13,6 +13,7 @@ function configureExpressApp(): express.Application {
   app.use(passport.initialize());
 
   app.use(cors(corsOptions));
+  app.options("*", cors(corsOptions));
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
