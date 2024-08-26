@@ -1,9 +1,9 @@
 // Import the required modules
-import { User, UserDocument, IUserModel } from "../models/index";
-import bcrypt from "bcryptjs";
-import { NextFunction, Request, Response } from "express";
-import { handleError, sendUserAndTokens } from "../shared/helper";
-import { omit } from "lodash";
+import bcrypt from 'bcryptjs';
+import { NextFunction, Request, Response } from 'express';
+import { omit } from 'lodash';
+import { IUserModel, User, UserDocument } from '../models';
+import { handleError, sendUserAndTokens } from '../shared/helper';
 
 interface CustomRequest extends Request {
   userObject: IUserModel;
@@ -13,7 +13,7 @@ interface CustomRequest extends Request {
 const { SALT_ROUNDS } = process.env;
 
 // Constants for header names
-const ACCESS_TOKEN_HEADER = "access-token";
+const ACCESS_TOKEN_HEADER = 'access-token';
 
 // Define a type for the user credentials
 type UserCredentials = { email: string; password: string };
@@ -30,7 +30,7 @@ const validateUserCredentials = async (
 
   // Throw an error if the user is not found
   if (!user) {
-    throw new Error("User not found");
+    throw new Error('User not found');
   }
 
   // Compare the password with the hashed password
@@ -38,7 +38,7 @@ const validateUserCredentials = async (
 
   // Throw an error if the password is invalid
   if (!isPasswordMatch) {
-    throw new Error("Invalid Password");
+    throw new Error('Invalid Password');
   }
 
   // Return the user if everything is valid
@@ -57,7 +57,7 @@ const signUp = async (req: Request, res: Response, next: NextFunction) => {
     // Check if the email is already registered
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(409).json({ message: "Email already used" });
+      return res.status(409).json({ message: 'Email already used' });
     }
 
     // Handle Google signup if a Google token is provided in the request
@@ -69,8 +69,8 @@ const signUp = async (req: Request, res: Response, next: NextFunction) => {
       // Example: const ticket = await client.verifyIdToken({ idToken: googleToken, audience: GOOGLE_CLIENT_ID });
       // For simplicity we will just set some dummy data here
       const profile = {
-        name: "John Doe",
-        imageUrl: "/path/to/image.jpg",
+        name: 'John Doe',
+        imageUrl: '/path/to/image.jpg',
       };
 
       // Create a new user with the given email and profile info
@@ -83,7 +83,7 @@ const signUp = async (req: Request, res: Response, next: NextFunction) => {
       await user.save();
 
       // Send back the created user without the sensitive password field
-      return res.status(201).json({ user: omit(user.toJSON(), ["password"]) });
+      return res.status(201).json({ user: omit(user.toJSON(), ['password']) });
     } else {
       // Hash the password using bcrypt and salt rounds
       const hashedPassword = await bcrypt.hash(password, Number(SALT_ROUNDS));
@@ -120,11 +120,7 @@ const login = async (req: Request, res: Response, next: NextFunction) => {
 
 GET /users/me/access-token
 Purpose: generates and returns an access token */
-const userAccessToken = async (
-  req: CustomRequest,
-  res: Response,
-  next: NextFunction
-) => {
+const userAccessToken = async (req: CustomRequest, res: Response, next: NextFunction) => {
   try {
     // we know that the user/caller is authenticated and we have the user_id and user object available to us
     const accessToken = await req.userObject.generateAccessAuthToken();
@@ -134,4 +130,4 @@ const userAccessToken = async (
   }
 };
 
-export { signUp, login, userAccessToken };
+export { login, signUp, userAccessToken };

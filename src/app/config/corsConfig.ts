@@ -2,6 +2,7 @@ const allowedOrigins = [
   "http://localhost:4200",
   "http://localhost:8200",
   "http://localhost:8100",
+  "*",
 ];
 
 export const corsOptions = {
