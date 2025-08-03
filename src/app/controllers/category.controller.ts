@@ -4,7 +4,8 @@ import { Category } from '../models';
 interface CategoryQueryParams {
   title?: string;
   page?: number;
-  size?: number;
+  limit?: number;
+  sort?: string;
 }
 
 // Error handling function
@@ -15,8 +16,9 @@ const handleError = (res: Response, error: any) => {
 // Create a new category
 const createCategory = async (req: Request, res: Response) => {
   try {
-    const { title, icon, color, user } = req.body;
-    const category = new Category({ title, icon, color, user });
+    const { title, icon, color } = req.body;
+    const { _id } = req.headers;
+    const category = new Category({ title, icon, color, user: _id });
     const newCategory = await category.save();
     res.status(201).json(newCategory);
   } catch (error) {
@@ -27,15 +29,29 @@ const createCategory = async (req: Request, res: Response) => {
 // Get all categories with filtering and pagination
 const getCategories = async (req: Request, res: Response) => {
   try {
-    const { title, page, size } = req.query as CategoryQueryParams;
-    const query: Record<string, any> = {};
+    const { title, page, limit, sort } = req.query as CategoryQueryParams;
+    const { _id } = req.headers;
+    const query: Record<string, any> = { user: _id };
     if (title) {
       query.title = { $regex: title, $options: 'i' };
     }
     const pageNumber = page ?? 1;
-    const pageSize = size ?? 10;
+    const pageSize = limit ?? 10;
+    let sortField = 'createdAt';
+    let sortOrder = 1;
+    if (sort) {
+      if (sort.startsWith('-')) {
+        sortField = sort.substring(1);
+        sortOrder = -1;
+      } else {
+        sortField = sort;
+        sortOrder = 1;
+      }
+    }
+    const sortObject = { [sortField]: sortOrder as 1 | -1 };
     const data = await Category.find(query)
       .populate('user', 'name')
+      .sort(sortObject)
       .skip((pageNumber - 1) * pageSize)
       .limit(pageSize);
     const total = await Category.countDocuments(query);
@@ -49,7 +65,8 @@ const getCategories = async (req: Request, res: Response) => {
 const getCategoryById = async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
-    const category = await Category.findById(id).populate('user', 'name');
+    const { _id } = req.headers;
+    const category = await Category.find({ _id: id, user: _id }).populate('user', 'name');
     if (!category) {
       res.status(404).json({ message: 'Category not found' });
     } else {
