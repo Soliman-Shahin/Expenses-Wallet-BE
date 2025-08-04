@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { Category } from '../models';
+import { sendError, sendSuccess } from '../shared/helper';
 
 interface CategoryQueryParams {
   title?: string;
@@ -8,11 +9,6 @@ interface CategoryQueryParams {
   sort?: string;
 }
 
-// Error handling function
-const handleError = (res: Response, error: any) => {
-  res.status(error.status || 500).json({ message: error.message });
-};
-
 // Create a new category
 const createCategory = async (req: Request, res: Response) => {
   try {
@@ -20,9 +16,9 @@ const createCategory = async (req: Request, res: Response) => {
     const { _id } = req.headers;
     const category = new Category({ title, icon, color, user: _id });
     const newCategory = await category.save();
-    res.status(201).json(newCategory);
-  } catch (error) {
-    handleError(res, error);
+    sendSuccess(res, newCategory, 'Category created successfully', 201);
+  } catch (error: any) {
+    sendError(res, error.message);
   }
 };
 
@@ -55,9 +51,9 @@ const getCategories = async (req: Request, res: Response) => {
       .skip((pageNumber - 1) * pageSize)
       .limit(pageSize);
     const total = await Category.countDocuments(query);
-    res.json({ data, total });
-  } catch (error) {
-    handleError(res, error);
+    sendSuccess(res, { data, total }, 'Categories retrieved successfully');
+  } catch (error: any) {
+    sendError(res, error.message);
   }
 };
 
@@ -66,14 +62,13 @@ const getCategoryById = async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
     const { _id } = req.headers;
-    const category = await Category.find({ _id: id, user: _id }).populate('user', 'name');
+    const category = await Category.findOne({ _id: id, user: _id }).populate('user', 'name');
     if (!category) {
-      res.status(404).json({ message: 'Category not found' });
-    } else {
-      res.json(category);
+      return sendError(res, 'Category not found', 404);
     }
-  } catch (error) {
-    handleError(res, error);
+    sendSuccess(res, category, 'Category retrieved successfully');
+  } catch (error: any) {
+    sendError(res, error.message);
   }
 };
 
@@ -88,12 +83,11 @@ const updateCategory = async (req: Request, res: Response) => {
       { new: true }
     );
     if (!category) {
-      res.status(404).json({ message: 'Category not found' });
-    } else {
-      res.json(category);
+      return sendError(res, 'Category not found', 404);
     }
-  } catch (error) {
-    handleError(res, error);
+    sendSuccess(res, category, 'Category updated successfully');
+  } catch (error: any) {
+    sendError(res, error.message);
   }
 };
 
@@ -103,12 +97,11 @@ const deleteCategory = async (req: Request, res: Response) => {
     const { id } = req.params;
     const category = await Category.findByIdAndDelete(id);
     if (!category) {
-      res.status(404).json({ message: 'Category not found' });
-    } else {
-      res.json({ message: 'Category deleted' });
+      return sendError(res, 'Category not found', 404);
     }
-  } catch (error) {
-    handleError(res, error);
+    sendSuccess(res, {}, 'Category deleted successfully');
+  } catch (error: any) {
+    sendError(res, error.message);
   }
 };
 

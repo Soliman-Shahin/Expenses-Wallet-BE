@@ -25,7 +25,7 @@ interface IUserSession {
   expiresAt: number;
 }
 
-interface IUserDocument extends Document {
+interface UserDocument extends Document {
   userId?: string;
   socialId?: string;
   signupType: SignupType;
@@ -35,19 +35,17 @@ interface IUserDocument extends Document {
   image?: string;
   emailVerified?: boolean;
   sessions: IUserSession[];
-}
-
-// Extending the mongoose Document to include the user fields
-interface UserDocument extends IUserDocument, Document {}
-
-interface IUserModel extends Model<IUserDocument> {
-  findByIdAndToken(id: string, token: string): Promise<IUserDocument | null>;
-  hasRefreshTokenExpired(expiresAt: number): boolean;
+  createSession(): Promise<string>;
   generateAccessAuthToken(): Promise<string>;
 }
 
+interface IUserModel extends Model<UserDocument> {
+  findByIdAndToken(id: string, token: string): Promise<UserDocument | null>;
+  hasRefreshTokenExpired(expiresAt: number): boolean;
+}
+
 // Define the user schema
-const UserSchema = new Schema<IUserDocument>(
+const UserSchema = new Schema<UserDocument>(
   {
     userId: String,
     socialId: String,
@@ -86,13 +84,11 @@ UserSchema.methods.toJSON = function () {
   return _.omit(userObject, ["password", "sessions"]);
 };
 
-UserSchema.methods.generateAccessAuthToken = async (
-  userId: string
-): Promise<string> => {
+UserSchema.methods.generateAccessAuthToken = async function (): Promise<string> {
   try {
     // Ensure the payload is an object, secret is a string, and options are correctly typed
     const token: string = jwt.sign(
-      { _id: userId },
+      { _id: this._id.toHexString() },
       jwtSecret,
       { expiresIn: "1h", algorithm: "HS256" } // SignOptions including algorithm
     );
@@ -119,7 +115,7 @@ UserSchema.methods.createSession = async function (): Promise<string> {
 UserSchema.statics.findByIdAndToken = async function (
   id: string,
   token: string
-): Promise<IUserDocument | null> {
+): Promise<UserDocument | null> {
   return this.findOne({ _id: id, "sessions.token": token });
 };
 
@@ -170,5 +166,5 @@ const generateRefreshTokenExpiryTime = () => {
 };
 
 // Create the user model using generics
-const User = model<IUserDocument, IUserModel>("User", UserSchema);
-export { User, UserDocument, IUserModel };
+const User = model<UserDocument, IUserModel>("User", UserSchema);
+export { User, UserDocument };

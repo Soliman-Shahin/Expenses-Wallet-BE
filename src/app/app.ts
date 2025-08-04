@@ -4,7 +4,7 @@ import session from "express-session";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import routes from "./routes";
-import { handleError } from "./shared/helper";
+import { errorHandler } from "./middleware/error-handler";
 import { corsOptions } from "./config/corsConfig";
 import "./config/passport-config";
 import dotenv from "dotenv";
@@ -31,7 +31,7 @@ function configureExpressApp(): express.Application {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
   app.use("/v1", routes);
-  app.use(handleError);
+  app.use(errorHandler);
 
   return app;
 }
