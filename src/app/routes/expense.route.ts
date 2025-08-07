@@ -7,12 +7,13 @@ import {
   getExpenseTotals,
   updateExpense,
 } from '../controllers';
-import { validateRequest, verifySession } from '../middleware';
+import { validateRequest } from '../middleware';
+import { verifyAccessToken } from '../middleware/access.middleware';
 import { expenseSchema } from '../validations/expense.validation';
 
 const router = Router();
 
-router.use(verifySession);
+router.use(verifyAccessToken);
 
 router.post('/', validateRequest(expenseSchema), createExpense);
 router.get('/totals', getExpenseTotals);

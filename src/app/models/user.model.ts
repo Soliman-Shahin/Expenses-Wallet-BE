@@ -37,6 +37,7 @@ interface UserDocument extends Document {
   sessions: IUserSession[];
   createSession(): Promise<string>;
   generateAccessAuthToken(): Promise<string>;
+  createRefreshToken(): Promise<string>;
 }
 
 interface IUserModel extends Model<UserDocument> {

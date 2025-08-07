@@ -1,18 +1,13 @@
 import { Response } from 'express';
-import mongoose from 'mongoose';
-import { Expense } from '../models';
 import { sendError, sendSuccess } from '../shared/helper';
 import { CustomRequest } from '../types/custom-request';
+import { ExpenseService } from '../services/expense.service';
 
 export const createExpense = async (req: CustomRequest, res: Response) => {
   try {
-    const { description, amount, category, date } = req.body;
-    const user = req.user_id;
-
-    const newExpense = new Expense({ description, amount, category, date, user });
-    await newExpense.save();
-
-    sendSuccess(res, newExpense, 'Expense created successfully');
+    const user = req.user_id || '';
+    const expense = await ExpenseService.createExpense(req.body, user);
+    sendSuccess(res, expense, 'Expense created successfully');
   } catch (error: any) {
     sendError(res, error.message);
   }
@@ -20,8 +15,8 @@ export const createExpense = async (req: CustomRequest, res: Response) => {
 
 export const getExpenses = async (req: CustomRequest, res: Response) => {
   try {
-    const user = req.user_id;
-    const expenses = await Expense.find({ user }).populate('category');
+    const user = req.user_id || '';
+    const expenses = await ExpenseService.getExpenses(user);
     sendSuccess(res, expenses);
   } catch (error: any) {
     sendError(res, error.message);
@@ -30,14 +25,12 @@ export const getExpenses = async (req: CustomRequest, res: Response) => {
 
 export const getExpenseById = async (req: CustomRequest, res: Response) => {
   try {
-    const { id } = req.params;
-    const user = req.user_id;
-
-    const expense = await Expense.findOne({ _id: id, user }).populate('category');
+    const id = req.params.id || '';
+    const user = req.user_id || '';
+    const expense = await ExpenseService.getExpenseById(id, user);
     if (!expense) {
       return sendError(res, 'Expense not found', 404);
     }
-
     sendSuccess(res, expense);
   } catch (error: any) {
     sendError(res, error.message);
@@ -46,20 +39,12 @@ export const getExpenseById = async (req: CustomRequest, res: Response) => {
 
 export const updateExpense = async (req: CustomRequest, res: Response) => {
   try {
-    const { id } = req.params;
-    const user = req.user_id;
-    const { description, amount, category, date } = req.body;
-
-    const updatedExpense = await Expense.findOneAndUpdate(
-      { _id: id, user },
-      { description, amount, category, date },
-      { new: true, runValidators: true }
-    ).populate('category');
-
+    const id = req.params.id || '';
+    const user = req.user_id || '';
+    const updatedExpense = await ExpenseService.updateExpense(id, req.body, user);
     if (!updatedExpense) {
       return sendError(res, 'Expense not found', 404);
     }
-
     sendSuccess(res, updatedExpense, 'Expense updated successfully');
   } catch (error: any) {
     sendError(res, error.message);
@@ -68,15 +53,12 @@ export const updateExpense = async (req: CustomRequest, res: Response) => {
 
 export const deleteExpense = async (req: CustomRequest, res: Response) => {
   try {
-    const { id } = req.params;
-    const user = req.user_id;
-
-    const deletedExpense = await Expense.findOneAndDelete({ _id: id, user });
-
+    const id = req.params.id || '';
+    const user = req.user_id || '';
+    const deletedExpense = await ExpenseService.deleteExpense(id, user);
     if (!deletedExpense) {
       return sendError(res, 'Expense not found', 404);
     }
-
     sendSuccess(res, {}, 'Expense deleted successfully');
   } catch (error: any) {
     sendError(res, error.message);
@@ -85,55 +67,12 @@ export const deleteExpense = async (req: CustomRequest, res: Response) => {
 
 export const getExpenseTotals = async (req: CustomRequest, res: Response) => {
   try {
-    const user = req.user_id;
+    const user = req.user_id || '';
     const { startDate, endDate } = req.query;
-
     if (!startDate || !endDate) {
       return sendError(res, 'Start date and end date are required', 400);
     }
-
-    const totals = await Expense.aggregate([
-      {
-        $match: {
-          user: new mongoose.Types.ObjectId(user),
-          date: {
-            $gte: new Date(startDate as string),
-            $lte: new Date(endDate as string),
-          },
-        },
-      },
-      {
-        $lookup: {
-          from: 'categories',
-          localField: 'category',
-          foreignField: '_id',
-          as: 'categoryDetails',
-        },
-      },
-      {
-        $unwind: '$categoryDetails',
-      },
-      {
-        $group: {
-          _id: '$categoryDetails.type',
-          total: { $sum: '$amount' },
-        },
-      },
-    ]);
-
-    const result = {
-      income: 0,
-      expenses: 0,
-    };
-
-    totals.forEach(item => {
-      if (item._id === 'income') {
-        result.income = item.total;
-      } else if (item._id === 'expense') {
-        result.expenses = item.total;
-      }
-    });
-
+    const result = await ExpenseService.getExpenseTotals(user, String(startDate), String(endDate));
     sendSuccess(res, result);
   } catch (error: any) {
     sendError(res, error.message);

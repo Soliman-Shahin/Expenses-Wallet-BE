@@ -1,6 +1,6 @@
 import { Request, RequestHandler, Response, Router } from 'express';
 import passport from 'passport';
-import { login, signUp, userAccessToken } from '../controllers';
+import { login, signUp, userAccessToken, refreshToken } from '../controllers';
 import { validateRequest, verifySession } from '../middleware';
 import { loginSchema, signUpSchema } from '../validations/user.validation';
 
@@ -9,6 +9,7 @@ const router = Router();
 // Routes for local authentication
 router.post('/signup', validateRequest(signUpSchema), signUp);
 router.post('/login', validateRequest(loginSchema), login);
+router.post('/refresh-token', refreshToken);
 router.get(
   '/access-token',
   verifySession as unknown as RequestHandler,
@@ -22,7 +23,7 @@ router.get(
 // );
 
 router.get(
-  '/auth/google',
+  '/google',
   passport.authenticate('google', {
     scope: ['https://www.googleapis.com/auth/plus.login'],
   })
