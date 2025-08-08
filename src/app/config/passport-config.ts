@@ -17,22 +17,59 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        const user = await User.findOne({ socialId: profile.id });
-        if (user) {
-          done(null, user);
-        } else {
-          //   create user
-          const newUser = new User({
-            socialId: profile.id,
-            signupType: profile.provider,
-            email: profile._json.email,
-            username: profile.displayName,
-            image: "profile.png",
-          });
-          // Saving user
-          await newUser.save();
-          done(null, newUser);
+        // 1) If user already connected Google before, fetch by socialId
+        const existingBySocial = await User.findOne({ socialId: profile.id });
+        if (existingBySocial) {
+          // Optionally refresh image/username if missing
+          const photo =
+            (profile.photos && profile.photos[0]?.value) || undefined;
+          let updated = false;
+          if (!existingBySocial.username && profile.displayName) {
+            existingBySocial.username = profile.displayName;
+            updated = true;
+          }
+          if (!existingBySocial.image && photo) {
+            existingBySocial.image = photo;
+            updated = true;
+          }
+          if (updated) await existingBySocial.save();
+          return done(null, existingBySocial);
         }
+
+        // 2) Otherwise, try to find an existing account by email and link it
+        const email =
+          (profile as any)._json?.email || profile.emails?.[0]?.value;
+        if (email) {
+          const existingByEmail = await User.findOne({ email });
+          if (existingByEmail) {
+            existingByEmail.socialId = profile.id;
+            // Preserve existing signupType if it was already social; otherwise set to google
+            if (
+              !existingByEmail.signupType ||
+              existingByEmail.signupType === "normal"
+            ) {
+              existingByEmail.signupType = profile.provider as any;
+            }
+            const photo =
+              (profile.photos && profile.photos[0]?.value) || undefined;
+            if (!existingByEmail.username && profile.displayName)
+              existingByEmail.username = profile.displayName;
+            if (!existingByEmail.image && photo) existingByEmail.image = photo;
+            await existingByEmail.save();
+            return done(null, existingByEmail);
+          }
+        }
+
+        // 3) Create a brand new user if no match by socialId or email
+        const newUser = new User({
+          socialId: profile.id,
+          signupType: profile.provider,
+          email: email,
+          username: profile.displayName,
+          image: (profile.photos && profile.photos[0]?.value) || "profile.png",
+        });
+        await newUser.save();
+        return done(null, newUser);
       } catch (err: any) {
         console.log(err);
         done(err);
@@ -52,22 +89,50 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        const user = await User.findOne({ socialId: profile.id });
-        if (user) {
-          done(null, user);
-        } else {
-          //   create user
-          const newUser = new User({
-            socialId: profile.id,
-            signupType: profile.provider,
-            email: profile._json.email,
-            username: profile.displayName,
-            image: "profile.png",
-          });
-          // Saving user
-          await newUser.save();
-          done(null, newUser);
+        // 1) If user already connected Facebook before
+        const existingBySocial = await User.findOne({ socialId: profile.id });
+        if (existingBySocial) {
+          const photo = (profile.photos && profile.photos[0]?.value) || undefined;
+          let updated = false;
+          if (!existingBySocial.username && profile.displayName) {
+            existingBySocial.username = profile.displayName;
+            updated = true;
+          }
+          if (!existingBySocial.image && photo) {
+            existingBySocial.image = photo;
+            updated = true;
+          }
+          if (updated) await existingBySocial.save();
+          return done(null, existingBySocial);
         }
+
+        // 2) Link existing account by email if found
+        const email = (profile as any)._json?.email || profile.emails?.[0]?.value;
+        if (email) {
+          const existingByEmail = await User.findOne({ email });
+          if (existingByEmail) {
+            existingByEmail.socialId = profile.id;
+            if (!existingByEmail.signupType || existingByEmail.signupType === "normal") {
+              existingByEmail.signupType = profile.provider as any;
+            }
+            const photo = (profile.photos && profile.photos[0]?.value) || undefined;
+            if (!existingByEmail.username && profile.displayName) existingByEmail.username = profile.displayName;
+            if (!existingByEmail.image && photo) existingByEmail.image = photo;
+            await existingByEmail.save();
+            return done(null, existingByEmail);
+          }
+        }
+
+        // 3) Create new account
+        const newUser = new User({
+          socialId: profile.id,
+          signupType: profile.provider,
+          email: email,
+          username: profile.displayName,
+          image: (profile.photos && profile.photos[0]?.value) || "profile.png",
+        });
+        await newUser.save();
+        return done(null, newUser);
       } catch (err: any) {
         console.log(err);
         done(err);

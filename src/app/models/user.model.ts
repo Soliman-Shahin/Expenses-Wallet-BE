@@ -33,6 +33,11 @@ interface UserDocument extends Document {
   password: string;
   username?: string;
   image?: string;
+  // Optional profile fields
+  fullName?: string;
+  phone?: string;
+  salary?: Array<{ label: string; amount: number }>;
+  currency?: string;
   emailVerified?: boolean;
   sessions: IUserSession[];
   createSession(): Promise<string>;
@@ -62,9 +67,28 @@ const UserSchema = new Schema<UserDocument>(
       trim: true,
       unique: true,
     },
-    password: { type: String, required: true, minlength: 8 },
+    password: {
+      type: String,
+      // Only require password for normal signups
+      required: function (this: any) {
+        return this.signupType === SignupType.Normal;
+      },
+      minlength: 8,
+    },
     username: String,
     image: String,
+    fullName: String,
+    phone: String,
+    salary: [
+      new Schema(
+        {
+          label: { type: String, required: true, trim: true },
+          amount: { type: Number, required: true, min: 0 },
+        },
+        { _id: false }
+      ),
+    ],
+    currency: String,
     emailVerified: Boolean,
     sessions: [
       {
@@ -85,19 +109,20 @@ UserSchema.methods.toJSON = function () {
   return _.omit(userObject, ["password", "sessions"]);
 };
 
-UserSchema.methods.generateAccessAuthToken = async function (): Promise<string> {
-  try {
-    // Ensure the payload is an object, secret is a string, and options are correctly typed
-    const token: string = jwt.sign(
-      { _id: this._id.toHexString() },
-      jwtSecret,
-      { expiresIn: "1h", algorithm: "HS256" } // SignOptions including algorithm
-    );
-    return token;
-  } catch (error) {
-    throw new Error(`JWT Sign Error: ${error}`);
-  }
-};
+UserSchema.methods.generateAccessAuthToken =
+  async function (): Promise<string> {
+    try {
+      // Ensure the payload is an object, secret is a string, and options are correctly typed
+      const token: string = jwt.sign(
+        { _id: this._id.toHexString() },
+        jwtSecret,
+        { expiresIn: "1h", algorithm: "HS256" } // SignOptions including algorithm
+      );
+      return token;
+    } catch (error) {
+      throw new Error(`JWT Sign Error: ${error}`);
+    }
+  };
 
 UserSchema.methods.createRefreshToken = async function (): Promise<string> {
   const buf = crypto.randomBytes(TOKEN_SETTINGS.LENGTH);
