@@ -10,10 +10,10 @@ interface CategoryQueryParams {
 }
 
 // Create a new category
-const createCategory = async (req: Request, res: Response) => {
+const createCategory = async (req: Request & { user_id?: string }, res: Response) => {
   try {
-    const { _id } = req.headers;
-    const category = await CategoryService.createCategory(req.body, _id as string);
+    const userId = req.user_id as string;
+    const category = await CategoryService.createCategory(req.body, userId);
     sendSuccess(res, category, 'Category created successfully', 201);
   } catch (error: any) {
     sendError(res, error.message);
@@ -21,10 +21,10 @@ const createCategory = async (req: Request, res: Response) => {
 };
 
 // Get all categories with filtering and pagination
-const getCategories = async (req: Request, res: Response) => {
+const getCategories = async (req: Request & { user_id?: string }, res: Response) => {
   try {
-    const { _id } = req.headers;
-    const result = await CategoryService.getCategories(req.query, _id as string);
+    const userId = req.user_id as string;
+    const result = await CategoryService.getCategories(req.query, userId);
     sendSuccess(res, result, 'Categories retrieved successfully');
   } catch (error: any) {
     sendError(res, error.message);
@@ -32,11 +32,11 @@ const getCategories = async (req: Request, res: Response) => {
 };
 
 // Get category by id
-const getCategoryById = async (req: Request, res: Response) => {
+const getCategoryById = async (req: Request & { user_id?: string }, res: Response) => {
   try {
     const id = req.params.id;
-    const { _id } = req.headers;
-    const category = await CategoryService.getCategoryById(id, _id as string);
+    const userId = req.user_id as string;
+    const category = await CategoryService.getCategoryById(id, userId);
     if (!category) {
       return sendError(res, 'Category not found', 404);
     }
@@ -47,10 +47,11 @@ const getCategoryById = async (req: Request, res: Response) => {
 };
 
 // Update a category
-const updateCategory = async (req: Request, res: Response) => {
+const updateCategory = async (req: Request & { user_id?: string }, res: Response) => {
   try {
     const { id } = req.params;
-    const category = await CategoryService.updateCategory(id, req.body);
+    const userId = req.user_id as string;
+    const category = await CategoryService.updateCategory(id, req.body, userId);
     if (!category) {
       return sendError(res, 'Category not found', 404);
     }
@@ -61,10 +62,11 @@ const updateCategory = async (req: Request, res: Response) => {
 };
 
 // Delete a category
-const deleteCategory = async (req: Request, res: Response) => {
+const deleteCategory = async (req: Request & { user_id?: string }, res: Response) => {
   try {
     const { id } = req.params;
-    const category = await CategoryService.deleteCategory(id);
+    const userId = req.user_id as string;
+    const category = await CategoryService.deleteCategory(id, userId);
     if (!category) {
       return sendError(res, 'Category not found', 404);
     }

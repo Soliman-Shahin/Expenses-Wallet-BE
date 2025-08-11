@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { verifyAccessToken } from '../middleware/access.middleware';
 import {
   createCategory,
   deleteCategory,
@@ -8,10 +9,11 @@ import {
 } from '../controllers';
 const router = Router();
 
-router.post('/create', createCategory);
-router.get('/list', getCategories);
-router.get('/:id', getCategoryById);
-router.put('/update/:id', updateCategory);
-router.delete('/delete/:id', deleteCategory);
+// Protect all category routes to ensure we have a user context
+router.post('/create', verifyAccessToken, createCategory);
+router.get('/list', verifyAccessToken, getCategories);
+router.get('/:id', verifyAccessToken, getCategoryById);
+router.put('/update/:id', verifyAccessToken, updateCategory);
+router.delete('/delete/:id', verifyAccessToken, deleteCategory);
 
 export default router;

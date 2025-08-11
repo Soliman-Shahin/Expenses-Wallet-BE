@@ -27,11 +27,15 @@ export class CategoryService {
     return Category.findOne({ _id: id, user: userId }).populate('user', 'name');
   }
 
-  static async updateCategory(id: string, data: any) {
-    return Category.findByIdAndUpdate(id, { ...data, modified: new Date() }, { new: true });
+  static async updateCategory(id: string, data: any, userId: string) {
+    return Category.findOneAndUpdate(
+      { _id: id, user: userId },
+      { ...data, modified: new Date() },
+      { new: true }
+    );
   }
 
-  static async deleteCategory(id: string) {
-    return Category.findByIdAndDelete(id);
+  static async deleteCategory(id: string, userId: string) {
+    return Category.findOneAndDelete({ _id: id, user: userId });
   }
 }
