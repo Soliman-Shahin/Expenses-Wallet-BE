@@ -5,6 +5,7 @@ const envOrigins = (process.env.ALLOWED_ORIGINS || "")
   .filter(Boolean);
 
 const defaultOrigins = [
+  "http://localhost", // Android WebView default origin
   "http://localhost:4200",
   "http://localhost:8200",
   "http://localhost:8100",
