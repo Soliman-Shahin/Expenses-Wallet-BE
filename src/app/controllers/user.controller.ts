@@ -27,6 +27,9 @@ const signUp = async (req: CustomRequest, res: Response) => {
     const accessToken = await UserService.generateAccessToken(user);
     const refreshToken = await UserService.generateRefreshToken();
     await UserService.addRefreshToken(user, refreshToken);
+    // Also return tokens in headers for legacy frontend compatibility
+    res.setHeader("access-token", accessToken);
+    res.setHeader("refresh-token", refreshToken);
     sendSuccess(res, { user, accessToken, refreshToken }, "Signup successful");
   } catch (error: any) {
     sendError(res, error.message);
@@ -41,6 +44,9 @@ const login = async (req: CustomRequest, res: Response) => {
     const accessToken = await UserService.generateAccessToken(user);
     const refreshToken = await UserService.generateRefreshToken();
     await UserService.addRefreshToken(user, refreshToken);
+    // Also return tokens in headers for legacy frontend compatibility
+    res.setHeader("access-token", accessToken);
+    res.setHeader("refresh-token", refreshToken);
     sendSuccess(res, { user, accessToken, refreshToken }, "Login successful");
   } catch (error: any) {
     sendError(res, error.message, 401);
@@ -54,6 +60,8 @@ const userAccessToken = async (req: CustomRequest, res: Response) => {
       return sendError(res, "User not found in request", 401);
     }
     const accessToken = await UserService.generateAccessToken(req.userObject);
+    // Mirror in header for clients that read headers
+    res.setHeader("access-token", accessToken);
     sendSuccess(res, { accessToken }, "Access token generated successfully");
   } catch (error: any) {
     sendError(res, error.message);
@@ -92,6 +100,9 @@ const refreshToken = async (req: CustomRequest, res: Response) => {
     await UserService.addRefreshToken(user, newRefreshToken);
     // Generate new access token
     const accessToken = await UserService.generateAccessToken(user);
+    // Expose in headers as well
+    res.setHeader("access-token", accessToken);
+    res.setHeader("refresh-token", newRefreshToken);
     res.status(200).json({ accessToken, refreshToken: newRefreshToken });
   } catch (error: any) {
     sendError(res, error.message, 401);

@@ -95,27 +95,8 @@ router.get(
       (function() {
         try {
           var data = ${JSON.stringify(payload)};
-          var sent = false;
-          var TARGET_ORIGIN = ${JSON.stringify(process.env.OAUTH_TARGET_ORIGIN || '*')};
-          var FALLBACK_REDIRECT = ${JSON.stringify(process.env.OAUTH_FALLBACK_REDIRECT || '')};
-
-          // Try posting to the opener (web popup flow)
-          try {
-            if (window.opener && typeof window.opener.postMessage === 'function') {
-              window.opener.postMessage({ type: 'google-auth-success', payload: data }, TARGET_ORIGIN);
-              sent = true;
-            }
-          } catch (e) {}
-
-          // If opener is not available (e.g., mobile external browser), redirect with payload
-          if (!sent && FALLBACK_REDIRECT) {
-            try {
-              var json = JSON.stringify(data);
-              var b64 = btoa(unescape(encodeURIComponent(json)));
-              var url = FALLBACK_REDIRECT + (FALLBACK_REDIRECT.indexOf('?') === -1 ? '?data=' : '&data=') + encodeURIComponent(b64);
-              window.location.replace(url);
-              sent = true;
-            } catch (e) {}
+          if (window.opener && typeof window.opener.postMessage === 'function') {
+            window.opener.postMessage({ type: 'google-auth-success', payload: data }, '*');
           }
         } catch (e) {
           // noop
@@ -178,25 +159,8 @@ router.get(
       (function() {
         try {
           var data = ${JSON.stringify(payload)};
-          var sent = false;
-          var TARGET_ORIGIN = ${JSON.stringify(process.env.OAUTH_TARGET_ORIGIN || '*')};
-          var FALLBACK_REDIRECT = ${JSON.stringify(process.env.OAUTH_FALLBACK_REDIRECT || '')};
-
-          try {
-            if (window.opener && typeof window.opener.postMessage === 'function') {
-              window.opener.postMessage({ type: 'facebook-auth-success', payload: data }, TARGET_ORIGIN);
-              sent = true;
-            }
-          } catch (e) {}
-
-          if (!sent && FALLBACK_REDIRECT) {
-            try {
-              var json = JSON.stringify(data);
-              var b64 = btoa(unescape(encodeURIComponent(json)));
-              var url = FALLBACK_REDIRECT + (FALLBACK_REDIRECT.indexOf('?') === -1 ? '?data=' : '&data=') + encodeURIComponent(b64);
-              window.location.replace(url);
-              sent = true;
-            } catch (e) {}
+          if (window.opener && typeof window.opener.postMessage === 'function') {
+            window.opener.postMessage({ type: 'facebook-auth-success', payload: data }, '*');
           }
         } catch (e) {
           // noop
