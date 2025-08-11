@@ -9,6 +9,9 @@ const defaultOrigins = [
   "http://localhost:8200",
   "http://localhost:8100",
   "http://127.0.0.1:51802",
+  // Ionic/Capacitor mobile webview origins
+  "capacitor://localhost",
+  "ionic://localhost",
   "https://expenses-wallet.up.railway.app", // API itself (not typically needed but safe)
 ];
 

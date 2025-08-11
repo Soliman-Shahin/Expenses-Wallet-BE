@@ -50,13 +50,15 @@ router.post(
   uploadAvatar as unknown as RequestHandler
 );
 
-router.get(
-  "/google",
-  passport.authenticate("google", {
+// Google OAuth start (supports forwarding state for mobile deep-linking)
+router.get("/google", (req, res, next) => {
+  const state = (req.query.state as string) || undefined; // base64url-encoded redirect URI for mobile
+  return (passport.authenticate("google", {
     scope: ["profile", "email"],
     session: false,
-  })
-);
+    state,
+  }) as unknown as RequestHandler)(req, res, next);
+});
 
 router.get(
   "/auth/google/callback",
@@ -82,6 +84,23 @@ router.get(
         user: safeUser,
         tokens: { accessToken, refreshToken },
       };
+
+      // If a mobile deep-link redirect URI was provided in state, redirect there with payload
+      let redirectUri: string | undefined;
+      const state = req.query.state as string | undefined; // base64url-encoded
+      if (state) {
+        try {
+          redirectUri = Buffer.from(state, "base64url").toString("utf8");
+        } catch (_) {
+          // ignore decode errors
+        }
+      }
+
+      if (redirectUri && /^(?:[a-z][a-z0-9+.-]*):\/\//i.test(redirectUri)) {
+        const data = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+        // Example: myapp://auth#auth=<base64url>
+        return res.redirect(`${redirectUri}#auth=${data}`);
+      }
 
       const html = `<!DOCTYPE html>
 <html lang="en">
@@ -118,13 +137,15 @@ router.get(
 );
 
 // Facebook Authentication Routes (popup flow like Google)
-router.get(
-  "/facebook",
-  passport.authenticate("facebook", {
+// Facebook OAuth start (supports forwarding state for mobile deep-linking)
+router.get("/facebook", (req, res, next) => {
+  const state = (req.query.state as string) || undefined; // base64url-encoded redirect URI for mobile
+  return (passport.authenticate("facebook", {
     scope: ["email"],
     session: false,
-  })
-);
+    state,
+  }) as unknown as RequestHandler)(req, res, next);
+});
 
 router.get(
   "/auth/facebook/callback",
@@ -146,6 +167,22 @@ router.get(
         user: safeUser,
         tokens: { accessToken, refreshToken },
       };
+
+      // If a mobile deep-link redirect URI was provided in state, redirect there with payload
+      let redirectUri: string | undefined;
+      const state = req.query.state as string | undefined; // base64url-encoded
+      if (state) {
+        try {
+          redirectUri = Buffer.from(state, "base64url").toString("utf8");
+        } catch (_) {
+          // ignore decode errors
+        }
+      }
+
+      if (redirectUri && /^(?:[a-z][a-z0-9+.-]*):\/\//i.test(redirectUri)) {
+        const data = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+        return res.redirect(`${redirectUri}#auth=${data}`);
+      }
 
       const html = `<!DOCTYPE html>
 <html lang="en">
