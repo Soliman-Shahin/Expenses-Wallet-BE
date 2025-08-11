@@ -50,15 +50,13 @@ router.post(
   uploadAvatar as unknown as RequestHandler
 );
 
-// Google OAuth start (supports forwarding state for mobile deep-linking)
-router.get("/google", (req, res, next) => {
-  const state = (req.query.state as string) || undefined; // base64url-encoded redirect URI for mobile
-  return (passport.authenticate("google", {
+router.get(
+  "/google",
+  passport.authenticate("google", {
     scope: ["profile", "email"],
     session: false,
-    state,
-  }) as unknown as RequestHandler)(req, res, next);
-});
+  })
+);
 
 router.get(
   "/auth/google/callback",
@@ -85,23 +83,6 @@ router.get(
         tokens: { accessToken, refreshToken },
       };
 
-      // If a mobile deep-link redirect URI was provided in state, redirect there with payload
-      let redirectUri: string | undefined;
-      const state = req.query.state as string | undefined; // base64url-encoded
-      if (state) {
-        try {
-          redirectUri = Buffer.from(state, "base64url").toString("utf8");
-        } catch (_) {
-          // ignore decode errors
-        }
-      }
-
-      if (redirectUri && /^(?:[a-z][a-z0-9+.-]*):\/\//i.test(redirectUri)) {
-        const data = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-        // Example: myapp://auth#auth=<base64url>
-        return res.redirect(`${redirectUri}#auth=${data}`);
-      }
-
       const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -114,8 +95,27 @@ router.get(
       (function() {
         try {
           var data = ${JSON.stringify(payload)};
-          if (window.opener && typeof window.opener.postMessage === 'function') {
-            window.opener.postMessage({ type: 'google-auth-success', payload: data }, '*');
+          var sent = false;
+          var TARGET_ORIGIN = ${JSON.stringify(process.env.OAUTH_TARGET_ORIGIN || '*')};
+          var FALLBACK_REDIRECT = ${JSON.stringify(process.env.OAUTH_FALLBACK_REDIRECT || '')};
+
+          // Try posting to the opener (web popup flow)
+          try {
+            if (window.opener && typeof window.opener.postMessage === 'function') {
+              window.opener.postMessage({ type: 'google-auth-success', payload: data }, TARGET_ORIGIN);
+              sent = true;
+            }
+          } catch (e) {}
+
+          // If opener is not available (e.g., mobile external browser), redirect with payload
+          if (!sent && FALLBACK_REDIRECT) {
+            try {
+              var json = JSON.stringify(data);
+              var b64 = btoa(unescape(encodeURIComponent(json)));
+              var url = FALLBACK_REDIRECT + (FALLBACK_REDIRECT.indexOf('?') === -1 ? '?data=' : '&data=') + encodeURIComponent(b64);
+              window.location.replace(url);
+              sent = true;
+            } catch (e) {}
           }
         } catch (e) {
           // noop
@@ -137,15 +137,13 @@ router.get(
 );
 
 // Facebook Authentication Routes (popup flow like Google)
-// Facebook OAuth start (supports forwarding state for mobile deep-linking)
-router.get("/facebook", (req, res, next) => {
-  const state = (req.query.state as string) || undefined; // base64url-encoded redirect URI for mobile
-  return (passport.authenticate("facebook", {
+router.get(
+  "/facebook",
+  passport.authenticate("facebook", {
     scope: ["email"],
     session: false,
-    state,
-  }) as unknown as RequestHandler)(req, res, next);
-});
+  })
+);
 
 router.get(
   "/auth/facebook/callback",
@@ -168,22 +166,6 @@ router.get(
         tokens: { accessToken, refreshToken },
       };
 
-      // If a mobile deep-link redirect URI was provided in state, redirect there with payload
-      let redirectUri: string | undefined;
-      const state = req.query.state as string | undefined; // base64url-encoded
-      if (state) {
-        try {
-          redirectUri = Buffer.from(state, "base64url").toString("utf8");
-        } catch (_) {
-          // ignore decode errors
-        }
-      }
-
-      if (redirectUri && /^(?:[a-z][a-z0-9+.-]*):\/\//i.test(redirectUri)) {
-        const data = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-        return res.redirect(`${redirectUri}#auth=${data}`);
-      }
-
       const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -196,8 +178,25 @@ router.get(
       (function() {
         try {
           var data = ${JSON.stringify(payload)};
-          if (window.opener && typeof window.opener.postMessage === 'function') {
-            window.opener.postMessage({ type: 'facebook-auth-success', payload: data }, '*');
+          var sent = false;
+          var TARGET_ORIGIN = ${JSON.stringify(process.env.OAUTH_TARGET_ORIGIN || '*')};
+          var FALLBACK_REDIRECT = ${JSON.stringify(process.env.OAUTH_FALLBACK_REDIRECT || '')};
+
+          try {
+            if (window.opener && typeof window.opener.postMessage === 'function') {
+              window.opener.postMessage({ type: 'facebook-auth-success', payload: data }, TARGET_ORIGIN);
+              sent = true;
+            }
+          } catch (e) {}
+
+          if (!sent && FALLBACK_REDIRECT) {
+            try {
+              var json = JSON.stringify(data);
+              var b64 = btoa(unescape(encodeURIComponent(json)));
+              var url = FALLBACK_REDIRECT + (FALLBACK_REDIRECT.indexOf('?') === -1 ? '?data=' : '&data=') + encodeURIComponent(b64);
+              window.location.replace(url);
+              sent = true;
+            } catch (e) {}
           }
         } catch (e) {
           // noop
