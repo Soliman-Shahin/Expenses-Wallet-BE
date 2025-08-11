@@ -83,6 +83,7 @@ router.get(
         tokens: { accessToken, refreshToken },
       };
 
+      const mobileRedirect = process.env.MOBILE_OAUTH_REDIRECT || '';
       const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -95,8 +96,14 @@ router.get(
       (function() {
         try {
           var data = ${JSON.stringify(payload)};
+          // Web/SPA popup flow
           if (window.opener && typeof window.opener.postMessage === 'function') {
             window.opener.postMessage({ type: 'google-auth-success', payload: data }, '*');
+          } else if ('${mobileRedirect}') {
+            // Mobile deep link fallback for Android/iOS
+            var b64 = btoa(JSON.stringify(data));
+            var target = '${mobileRedirect}'.replace(/[#?]*$/, '') + '#payload=' + encodeURIComponent(b64);
+            window.location.replace(target);
           }
         } catch (e) {
           // noop
@@ -147,6 +154,7 @@ router.get(
         tokens: { accessToken, refreshToken },
       };
 
+      const mobileRedirect = process.env.MOBILE_OAUTH_REDIRECT || '';
       const html = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -161,6 +169,10 @@ router.get(
           var data = ${JSON.stringify(payload)};
           if (window.opener && typeof window.opener.postMessage === 'function') {
             window.opener.postMessage({ type: 'facebook-auth-success', payload: data }, '*');
+          } else if ('${mobileRedirect}') {
+            var b64 = btoa(JSON.stringify(data));
+            var target = '${mobileRedirect}'.replace(/[#?]*$/, '') + '#payload=' + encodeURIComponent(b64);
+            window.location.replace(target);
           }
         } catch (e) {
           // noop
