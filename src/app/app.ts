@@ -13,12 +13,29 @@ dotenv.config();
 
 function configureExpressApp(): express.Application {
   const app = express();
+  const isProduction = process.env.NODE_ENV === "production";
+  const sessionSecret = process.env.SECRET_KEY || process.env.JWT_SECRET;
+
+  if (!sessionSecret) {
+    console.warn(
+      "[server]: SESSION secret is not set. Please set SECRET_KEY or JWT_SECRET in environment variables."
+    );
+  }
+
+  // Needed for secure cookies when behind a proxy (Railway/Render/Heroku)
+  app.set("trust proxy", 1);
 
   app.use(
     session({
-      secret: process.env.SECRET_KEY!,
+      secret: sessionSecret as string,
       resave: false,
       saveUninitialized: true,
+      cookie: {
+        httpOnly: true,
+        sameSite: isProduction ? "none" : "lax",
+        secure: isProduction, // requires HTTPS when true
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+      },
     })
   );
 

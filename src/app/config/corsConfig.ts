@@ -1,19 +1,40 @@
-const allowedOrigins = [
+// Allow overriding origins from environment variable (comma-separated)
+const envOrigins = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const defaultOrigins = [
   "http://localhost:4200",
   "http://localhost:8200",
   "http://localhost:8100",
   "http://127.0.0.1:51802",
-  "*",
+  "https://expenses-wallet.up.railway.app", // API itself (not typically needed but safe)
 ];
 
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
+
 export const corsOptions = {
-  origin: (origin: any, callback: any) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow server-to-server or non-browser requests (no origin)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
     }
+
+    return callback(new Error("Not allowed by CORS"));
   },
-  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "access-token",
+    "refresh-token",
+    "X-Requested-With",
+  ],
   exposedHeaders: ["access-token", "refresh-token"],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 };
