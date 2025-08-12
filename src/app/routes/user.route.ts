@@ -1,6 +1,7 @@
 import { Request, RequestHandler, Response, Router } from "express";
 import passport from "passport";
 import { User } from "../models/user.model";
+import https from "https";
 import {
   login,
   signUp,
@@ -36,20 +37,51 @@ router.post(
         return res.status(400).json({ message: "idToken is required" });
       }
 
-      // Verify idToken with Google tokeninfo
-      const resp = await fetch(
-        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(
-          idToken
-        )}`
-      );
-      if (!resp.ok) {
-        return res.status(401).json({ message: "Invalid Google idToken" });
+      // Verify idToken with Google tokeninfo (with fetch fallback)
+      const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`;
+      const fetchFn: any = (globalThis as any).fetch;
+      let info: any;
+      try {
+        if (typeof fetchFn === "function") {
+          const resp = await fetchFn(url);
+          if (!resp.ok) {
+            console.warn("[google/native] tokeninfo resp not ok", resp.status);
+            return res.status(401).json({ message: "Invalid Google idToken" });
+          }
+          info = await resp.json();
+        } else {
+          // Fallback using https
+          info = await new Promise((resolve, reject) => {
+            https
+              .get(url, (r) => {
+                let data = "";
+                r.on("data", (chunk) => (data += chunk));
+                r.on("end", () => {
+                  try {
+                    const json = JSON.parse(data);
+                    if ((r.statusCode || 0) >= 200 && (r.statusCode || 0) < 300) {
+                      resolve(json);
+                    } else {
+                      console.warn("[google/native] https tokeninfo bad status", r.statusCode);
+                      reject(new Error("Invalid Google idToken"));
+                    }
+                  } catch (e) {
+                    reject(e);
+                  }
+                });
+              })
+              .on("error", reject);
+          });
+        }
+      } catch (e) {
+        console.error("[google/native] tokeninfo fetch error", e);
+        return res.status(500).json({ message: "Token verification failed" });
       }
-      const info: any = await resp.json();
 
       // Optional audience check if env is set
       const expectedAud = process.env.GOOGLE_WEB_CLIENT_ID;
       if (expectedAud && info?.aud !== expectedAud) {
+        console.warn("[google/native] audience mismatch", { aud: info?.aud, expectedAud });
         return res.status(401).json({ message: "Invalid token audience" });
       }
 
@@ -60,6 +92,7 @@ router.post(
       const picture = (info?.picture as string) || undefined;
 
       if (!sub || !email) {
+        console.warn("[google/native] missing fields", { hasSub: !!sub, hasEmail: !!email });
         return res.status(400).json({ message: "Missing Google profile fields" });
       }
 
