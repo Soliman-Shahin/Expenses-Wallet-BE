@@ -1,5 +1,6 @@
 import { Request, RequestHandler, Response, Router } from "express";
 import passport from "passport";
+import { User } from "../models/user.model";
 import {
   login,
   signUp,
@@ -24,6 +25,91 @@ const upload = multer({
 router.post("/signup", validateRequest(signUpSchema), signUp);
 router.post("/login", validateRequest(loginSchema), login);
 router.post("/refresh-token", refreshToken);
+
+// Native Google Sign-In (Android/iOS) using idToken from Capacitor plugin
+router.post(
+  "/auth/google/native",
+  async (req: Request, res: Response) => {
+    try {
+      const { idToken } = req.body || {};
+      if (!idToken || typeof idToken !== "string") {
+        return res.status(400).json({ message: "idToken is required" });
+      }
+
+      // Verify idToken with Google tokeninfo
+      const resp = await fetch(
+        `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(
+          idToken
+        )}`
+      );
+      if (!resp.ok) {
+        return res.status(401).json({ message: "Invalid Google idToken" });
+      }
+      const info: any = await resp.json();
+
+      // Optional audience check if env is set
+      const expectedAud = process.env.GOOGLE_WEB_CLIENT_ID;
+      if (expectedAud && info?.aud !== expectedAud) {
+        return res.status(401).json({ message: "Invalid token audience" });
+      }
+
+      const sub = info?.sub as string | undefined;
+      const email = info?.email as string | undefined;
+      const emailVerified = info?.email_verified === "true" || info?.email_verified === true;
+      const name = (info?.name as string) || undefined;
+      const picture = (info?.picture as string) || undefined;
+
+      if (!sub || !email) {
+        return res.status(400).json({ message: "Missing Google profile fields" });
+      }
+
+      // Find or create user by socialId or email
+      let user = await User.findOne({ $or: [{ socialId: sub }, { email }] });
+      if (!user) {
+        user = new (User as any)({
+          signupType: "google",
+          socialId: sub,
+          email,
+          username: name,
+          image: picture,
+          emailVerified,
+        });
+        await (user as any).save();
+      } else {
+        // Update profile data if changed
+        let mutated = false;
+        if (!user.socialId) {
+          (user as any).socialId = sub; mutated = true;
+        }
+        if (name && user.username !== name) {
+          (user as any).username = name; mutated = true;
+        }
+        if (picture && user.image !== picture) {
+          (user as any).image = picture; mutated = true;
+        }
+        if (emailVerified !== undefined && user.emailVerified !== emailVerified) {
+          (user as any).emailVerified = emailVerified; mutated = true;
+        }
+        if (mutated) await (user as any).save();
+      }
+
+      const refreshToken = await (user as any).createSession();
+      const accessToken = await (user as any).generateAccessAuthToken();
+
+      const rawUser = (user as any).toJSON ? (user as any).toJSON() : user;
+      const { password, sessions, ...safeUser } = rawUser;
+
+      return res.status(200).json({
+        data: {
+          user: safeUser,
+          tokens: { accessToken, refreshToken },
+        },
+      });
+    } catch (err) {
+      return res.status(500).json({ message: "Authentication processing error" });
+    }
+  }
+);
 router.get(
   "/access-token",
   verifySession as unknown as RequestHandler,
