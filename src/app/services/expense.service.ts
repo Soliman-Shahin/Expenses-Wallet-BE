@@ -7,8 +7,65 @@ export class ExpenseService {
     return expense.save();
   }
 
-  static async getExpenses(userId: string) {
-    return Expense.find({ user: userId }).populate('category');
+  static async getExpenses(userId: string, filters?: {
+    search?: string;
+    category?: string;
+    type?: 'income' | 'expense';
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+    skip?: number;
+  }) {
+    const query: any = { user: userId };
+    
+    // Date range filter
+    if (filters?.startDate || filters?.endDate) {
+      query.date = {};
+      if (filters.startDate) query.date.$gte = new Date(filters.startDate);
+      if (filters.endDate) query.date.$lte = new Date(filters.endDate);
+    }
+
+    let expenseQuery = Expense.find(query).populate('category');
+
+    // Apply search after population
+    const expenses = await expenseQuery.exec();
+    
+    let filteredExpenses = expenses;
+
+    // Search filter (description only)
+    if (filters?.search) {
+      const searchTerm = filters.search.toLowerCase();
+      filteredExpenses = filteredExpenses.filter(expense => 
+        expense.description?.toLowerCase().includes(searchTerm)
+      );
+    }
+
+    // Category filter
+    if (filters?.category) {
+      filteredExpenses = filteredExpenses.filter(expense => 
+        expense.category && (expense.category as any)._id.toString() === filters.category
+      );
+    }
+
+    // Type filter (income/expense)
+    if (filters?.type) {
+      filteredExpenses = filteredExpenses.filter(expense => 
+        expense.category && (expense.category as any).type === filters.type
+      );
+    }
+
+    // Sort by date (newest first)
+    filteredExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    // Pagination
+    const skip = filters?.skip || 0;
+    const limit = filters?.limit || filteredExpenses.length;
+    
+    return {
+      data: filteredExpenses.slice(skip, skip + limit),
+      total: filteredExpenses.length,
+      hasMore: skip + limit < filteredExpenses.length
+    };
   }
 
   static async getExpenseById(id: string, userId: string) {

@@ -16,7 +16,19 @@ export const createExpense = async (req: CustomRequest, res: Response) => {
 export const getExpenses = async (req: CustomRequest, res: Response) => {
   try {
     const user = req.user_id || '';
-    const expenses = await ExpenseService.getExpenses(user);
+    const { search, category, type, startDate, endDate, limit, skip } = req.query;
+    
+    const filters = {
+      search: search as string,
+      category: category as string,
+      type: type as 'income' | 'expense',
+      startDate: startDate as string,
+      endDate: endDate as string,
+      limit: limit ? parseInt(limit as string) : undefined,
+      skip: skip ? parseInt(skip as string) : undefined,
+    };
+
+    const expenses = await ExpenseService.getExpenses(user, filters);
     sendSuccess(res, expenses);
   } catch (error: any) {
     sendError(res, error.message);
