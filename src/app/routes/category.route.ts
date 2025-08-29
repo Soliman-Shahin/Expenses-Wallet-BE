@@ -6,6 +6,7 @@ import {
   getCategories,
   getCategoryById,
   updateCategory,
+  updateOrder,
 } from '../controllers';
 const router = Router();
 
@@ -15,5 +16,6 @@ router.get('/list', verifyAccessToken, getCategories);
 router.get('/:id', verifyAccessToken, getCategoryById);
 router.put('/update/:id', verifyAccessToken, updateCategory);
 router.delete('/delete/:id', verifyAccessToken, deleteCategory);
+router.put('/update-order', verifyAccessToken, updateOrder);
 
 export default router;

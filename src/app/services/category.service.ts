@@ -8,9 +8,10 @@ export class CategoryService {
   }
 
   static async getCategories(query: any, userId: string) {
-    const { title, page = 1, limit = 10, sort = 'createdAt' } = query;
+    const { q, type, page = 1, limit = 10, sort = 'order' } = query;
     const filter: Record<string, any> = { user: userId };
-    if (title) filter.title = { $regex: title, $options: 'i' };
+    if (q) filter.title = { $regex: q, $options: 'i' };
+    if (type) filter.type = type;
     const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
     const sortOrder = sort.startsWith('-') ? -1 : 1;
     const sortObj: Record<string, 1 | -1> = { [sortField]: sortOrder as 1 | -1 };
@@ -36,6 +37,26 @@ export class CategoryService {
   }
 
   static async deleteCategory(id: string, userId: string) {
-    return Category.findOneAndDelete({ _id: id, user: userId });
+    const category = await Category.findOne({ _id: id, user: userId });
+
+    if (!category) {
+      return null;
+    }
+
+    if (category.isDefault) {
+      throw new Error('The default category cannot be deleted.');
+    }
+
+    return category.deleteOne();
+  }
+
+  static async updateOrder(categories: { id: string; order: number }[], userId: string) {
+    const bulkOps = categories.map(category => ({
+      updateOne: {
+        filter: { _id: new Types.ObjectId(category.id), user: new Types.ObjectId(userId) },
+        update: { $set: { order: category.order } },
+      },
+    }));
+    return Category.bulkWrite(bulkOps);
   }
 }

@@ -2,7 +2,7 @@ import { Response } from "express";
 import { sendError, sendSuccess } from "../shared/helper";
 import { CustomRequest } from "../types/custom-request";
 import { UserService } from "../services/user.service";
-import { User } from "../models";
+import { User, Category } from "../models";
 import bcrypt from "bcryptjs";
 
 const { SALT_ROUNDS } = process.env;
@@ -23,6 +23,15 @@ const signUp = async (req: CustomRequest, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, Number(SALT_ROUNDS));
     // Create user
     const user = await UserService.createUser(email, hashedPassword);
+    // Create a default category for the new user
+    await Category.create({
+      title: 'Uncategorized',
+      icon: 'help-circle-outline',
+      color: '#9E9E9E',
+      type: 'outcome',
+      user: user._id,
+      isDefault: true,
+    });
     // Generate tokens
     const accessToken = await UserService.generateAccessToken(user);
     const refreshToken = await UserService.generateRefreshToken();

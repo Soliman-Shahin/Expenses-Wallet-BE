@@ -76,4 +76,23 @@ const deleteCategory = async (req: Request & { user_id?: string }, res: Response
   }
 };
 
-export { createCategory, deleteCategory, getCategories, getCategoryById, updateCategory };
+// update categories order
+const updateOrder = async (req: Request & { user_id?: string }, res: Response) => {
+  try {
+    const userId = req.user_id as string;
+    const { categories } = req.body;
+    await CategoryService.updateOrder(categories, userId);
+    sendSuccess(res, {}, 'Categories order updated successfully');
+  } catch (error: any) {
+    sendError(res, error.message);
+  }
+};
+
+export {
+  createCategory,
+  deleteCategory,
+  getCategories,
+  getCategoryById,
+  updateCategory,
+  updateOrder,
+};
