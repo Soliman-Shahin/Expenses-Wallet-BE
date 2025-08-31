@@ -150,6 +150,11 @@ const updateMe = async (
     const userId = req.user_id;
     if (!userId) return sendError(res, "Unauthorized", 401);
 
+    // Explicitly remove email from the update payload to prevent changes
+    if ((req.body as any).email) {
+      delete (req.body as any).email;
+    }
+
     // Normalize: if fullName is provided without username, use it as username
     if ((req.body as any)?.fullName && !(req.body as any)?.username) {
       (req.body as any).username = (req.body as any).fullName;
