@@ -14,6 +14,17 @@ const categorySchema = new Schema(
     order: { type: Number, default: 0 },
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     isDefault: { type: Boolean, default: false },
+    // Sync fields
+    _syncStatus: { 
+      type: String, 
+      enum: ['synced', 'pending', 'conflict', 'error', 'offline'],
+      default: 'synced'
+    },
+    _lastModified: { type: Date, default: Date.now },
+    _version: { type: Number, default: 1 },
+    _isDeleted: { type: Boolean, default: false },
+    _conflictData: { type: Schema.Types.Mixed },
+    _clientId: { type: String }
   },
   { timestamps: true }
 );
@@ -38,6 +49,11 @@ categorySchema.pre('deleteOne', { document: true, query: false }, async function
     next(error);
   }
 });
+
+// Index for sync operations
+categorySchema.index({ user: 1, _lastModified: -1 });
+categorySchema.index({ user: 1, _syncStatus: 1 });
+categorySchema.index({ _clientId: 1 });
 
 const Category = model('Category', categorySchema);
 export { Category };

@@ -5,6 +5,13 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import routes from "./routes";
 import { errorHandler } from "./middleware/error-handler";
+import { 
+  trackSyncOperation, 
+  handleSyncError, 
+  validateSyncData, 
+  rateLimitSync, 
+  addSyncHeaders 
+} from "./middleware/sync.middleware";
 import { corsOptions } from "./config/corsConfig";
 import "./config/passport-config";
 import dotenv from "dotenv";
@@ -47,7 +54,15 @@ function configureExpressApp(): express.Application {
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
+  
+  // Sync middleware
+  app.use(trackSyncOperation);
+  app.use(validateSyncData);
+  app.use(rateLimitSync(100, 15 * 60 * 1000)); // 100 requests per 15 minutes
+  app.use(addSyncHeaders);
+  
   app.use("/v1", routes);
+  app.use(handleSyncError);
   app.use(errorHandler);
 
   return app;
