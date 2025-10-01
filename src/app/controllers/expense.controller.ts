@@ -21,7 +21,7 @@ export const getExpenses = async (req: CustomRequest, res: Response) => {
     const filters = {
       search: search as string,
       category: category as string,
-      type: type as 'income' | 'expense',
+      type: type as 'income' | 'outcome',
       startDate: startDate as string,
       endDate: endDate as string,
       limit: limit ? parseInt(limit as string) : undefined,

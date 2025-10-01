@@ -12,7 +12,7 @@ export class ExpenseService {
     filters?: {
       search?: string;
       category?: string;
-      type?: "income" | "expense";
+      type?: "income" | "outcome";
       startDate?: string;
       endDate?: string;
       limit?: number;
@@ -126,7 +126,7 @@ export class ExpenseService {
     const result = { income: 0, expenses: 0 };
     totals.forEach((item: any) => {
       if (item._id === "income") result.income = item.total;
-      else if (item._id === "expense") result.expenses = item.total;
+      else if (item._id === "outcome") result.expenses = item.total;
     });
     return result;
   }
