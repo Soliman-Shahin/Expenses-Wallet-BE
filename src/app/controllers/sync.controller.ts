@@ -12,7 +12,19 @@ export class SyncController {
 
   async pullData(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      console.log('Pull data controller called');
+      const userId = (req as any).user?._id || (req as any).user_id;
+      console.log('User ID:', userId);
+      
+      if (!userId) {
+        console.error('No userId found');
+        res.status(400).json({
+          success: false,
+          message: 'User ID is required'
+        });
+        return;
+      }
+      
       const { lastSyncTime, entityType, limit, offset } = req.query;
       
       const request: SyncRequest = {
@@ -22,13 +34,23 @@ export class SyncController {
         offset: offset ? parseInt(offset as string) : 0
       };
 
+      console.log('📞 Calling syncService.pullData...');
       const result = await this.syncService.pullData(userId, request);
+      console.log('✅ Got result from syncService:', { 
+        entitiesCount: result.entities.length, 
+        conflictsCount: result.conflicts.length,
+        totalCount: result.totalCount 
+      });
+      
+      console.log('📤 Sending response...');
       res.status(200).json({
         success: true,
         data: result,
         message: 'Sync data pulled successfully'
       });
+      console.log('✅ Response sent successfully');
     } catch (error) {
+      console.error('❌ Error in pullData controller:', error);
       next(error);
     }
   }
@@ -37,7 +59,7 @@ export class SyncController {
 
   async pushData(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       const { entities } = req.body;
 
       if (!entities || !Array.isArray(entities)) {
@@ -63,7 +85,7 @@ export class SyncController {
 
   async bulkSync(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       const { entities } = req.body;
 
       if (!entities || !Array.isArray(entities)) {
@@ -89,7 +111,7 @@ export class SyncController {
 
   async getConflicts(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       const conflicts = await this.syncService.getConflicts(userId);
       res.status(200).json({
         success: true,
@@ -103,7 +125,7 @@ export class SyncController {
 
   async resolveConflict(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       const conflictData: ConflictResolutionRequest = req.body;
 
       if (!conflictData.entityId || !conflictData.entityType || !conflictData.resolution) {
@@ -129,7 +151,7 @@ export class SyncController {
 
   async getSyncMetadata(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       const metadata = await this.syncService.getSyncMetadata(userId);
       res.status(200).json({
         success: true,
@@ -143,7 +165,7 @@ export class SyncController {
 
   async updateSyncMetadata(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       const updates = req.body;
 
       await this.syncService.updateSyncMetadata(userId, updates);
@@ -161,7 +183,7 @@ export class SyncController {
 
   async cleanupSyncData(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       const { olderThanDays } = req.query;
       const days = olderThanDays ? parseInt(olderThanDays as string) : 30;
 
@@ -180,7 +202,7 @@ export class SyncController {
 
   async forceSync(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       
       // Update metadata to indicate syncing
       await this.syncService.updateSyncMetadata(userId, { isSyncing: true });
@@ -208,7 +230,7 @@ export class SyncController {
 
     } catch (error) {
       // Update metadata to indicate sync error
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       if (userId) {
         await this.syncService.updateSyncMetadata(userId, { isSyncing: false });
       }
@@ -220,13 +242,12 @@ export class SyncController {
 
   async getSyncStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const userId = (req as any).user?._id;
+      const userId = (req as any).user?._id || (req as any).user_id;
       const metadata = await this.syncService.getSyncMetadata(userId);
       const conflicts = await this.syncService.getConflicts(userId);
       
       const status = {
         metadata,
-        conflicts: conflicts.length,
         isOnline: true, // This would be determined by network status
         lastSyncTime: metadata.lastSyncTime,
         pendingCount: metadata.pendingCount,

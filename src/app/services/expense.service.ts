@@ -3,7 +3,14 @@ import mongoose from "mongoose";
 
 export class ExpenseService {
   static async createExpense(data: any, userId: string) {
-    const expense = new Expense({ ...data, user: userId });
+    const expense = new Expense({
+      ...data,
+      user: userId,
+      _syncStatus: 'synced',
+      _lastModified: new Date(),
+      _version: 1,
+      _isDeleted: false
+    });
     return expense.save();
   }
 
@@ -19,7 +26,10 @@ export class ExpenseService {
       skip?: number;
     }
   ) {
-    const query: any = { user: userId };
+    const query: any = {
+      user: userId,
+      _isDeleted: { $ne: true } // Exclude deleted items from normal queries
+    };
 
     // Date range filter
     if (filters?.startDate || filters?.endDate) {
@@ -28,68 +38,119 @@ export class ExpenseService {
       if (filters.endDate) query.date.$lte = new Date(filters.endDate);
     }
 
-    let expenseQuery = Expense.find(query).populate("category");
-
-    // Apply search after population
-    const expenses = await expenseQuery.exec();
-
-    let filteredExpenses = expenses;
-
-    // Search filter (description only)
+    // Search filter (description only) - moved to query
     if (filters?.search) {
-      const searchTerm = filters.search.toLowerCase();
-      filteredExpenses = filteredExpenses.filter((expense) =>
-        expense.description?.toLowerCase().includes(searchTerm)
-      );
+      query.description = { $regex: filters.search, $options: 'i' };
     }
 
-    // Category filter
+    // Category filter - moved to query
     if (filters?.category) {
-      filteredExpenses = filteredExpenses.filter(
-        (expense) =>
-          expense.category &&
-          (expense.category as any)._id.toString() === filters.category
-      );
+      query.category = filters.category;
     }
 
-    // Type filter (income/expense)
+    // Build aggregation pipeline for type filter (requires category lookup)
     if (filters?.type) {
-      filteredExpenses = filteredExpenses.filter(
-        (expense) =>
-          expense.category && (expense.category as any).type === filters.type
-      );
+      const skip = filters?.skip || 0;
+      const limit = filters?.limit || 50;
+
+      const pipeline = [
+        { $match: query },
+        {
+          $lookup: {
+            from: 'categories',
+            localField: 'category',
+            foreignField: '_id',
+            as: 'categoryDetails'
+          }
+        },
+        { $unwind: '$categoryDetails' },
+        { $match: { 'categoryDetails.type': filters.type } },
+        { $sort: { date: -1 } },
+        {
+          $facet: {
+            data: [
+              { $skip: skip },
+              { $limit: limit }
+            ],
+            total: [
+              { $count: 'count' }
+            ]
+          }
+        }
+      ];
+
+      const result = await Expense.aggregate(pipeline as any);
+      const data = result[0]?.data || [];
+      const total = result[0]?.total[0]?.count || 0;
+
+      // Populate category for returned data
+      await Expense.populate(data, { path: 'category' });
+
+      return {
+        data,
+        total,
+        hasMore: skip + limit < total,
+      };
     }
 
-    // Sort by date (newest first)
-    filteredExpenses.sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    );
-
-    // Pagination
+    // Standard query without type filter
     const skip = filters?.skip || 0;
-    const limit = filters?.limit || filteredExpenses.length;
+    const limit = filters?.limit || 50;
+
+    const [data, total] = await Promise.all([
+      Expense.find(query)
+        .populate('category')
+        .sort({ date: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Expense.countDocuments(query)
+    ]);
 
     return {
-      data: filteredExpenses.slice(skip, skip + limit),
-      total: filteredExpenses.length,
-      hasMore: skip + limit < filteredExpenses.length,
+      data,
+      total,
+      hasMore: skip + limit < total,
     };
   }
 
   static async getExpenseById(id: string, userId: string) {
-    return Expense.findOne({ _id: id, user: userId }).populate("category");
+    return Expense.findOne({
+      _id: id,
+      user: userId,
+      _isDeleted: { $ne: true }
+    }).populate("category");
   }
 
   static async updateExpense(id: string, data: any, userId: string) {
+    const expense = await Expense.findOne({ _id: id, user: userId });
+    if (!expense) return null;
+
+    const currentVersion = expense._version || 0;
+    
     return Expense.findOneAndUpdate(
       { _id: id, user: userId },
-      { ...data },
+      {
+        ...data,
+        _syncStatus: 'synced',
+        _lastModified: new Date(),
+        _version: currentVersion + 1
+      },
       { new: true, runValidators: true }
     ).populate("category");
   }
 
   static async deleteExpense(id: string, userId: string) {
-    return Expense.findOneAndDelete({ _id: id, user: userId });
+    // Soft delete for sync purposes
+    return Expense.findOneAndUpdate(
+      { _id: id, user: userId },
+      {
+        _isDeleted: true,
+        _syncStatus: 'synced',
+        _lastModified: new Date()
+      },
+      { new: true }
+    );
   }
 
   static async getExpenseTotals(
@@ -101,6 +162,7 @@ export class ExpenseService {
       {
         $match: {
           user: new mongoose.Types.ObjectId(userId),
+          _isDeleted: { $ne: true },
           date: {
             $gte: new Date(startDate),
             $lte: new Date(endDate),

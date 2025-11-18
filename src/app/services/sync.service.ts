@@ -2,6 +2,7 @@ import { Expense } from '../models/expense.model';
 import { Category } from '../models/category.model';
 import { User } from '../models/user.model';
 import { SyncOperation, ConflictResolution, SyncMetadata } from '../models/sync.model';
+import mongoose from 'mongoose';
 
 export interface SyncRequest {
   lastSyncTime?: Date;
@@ -33,20 +34,33 @@ export class SyncService {
   async pullData(userId: string, request: SyncRequest): Promise<SyncResponse> {
     const { lastSyncTime, entityType, limit = 50, offset = 0 } = request;
 
+    console.log('📥 Pull data request:', { userId, lastSyncTime, entityType, limit, offset });
+
     try {
+      if (!userId) {
+        console.error('❌ No userId provided to pullData');
+        throw new Error('User ID is required');
+      }
+
+      // Convert userId string to ObjectId for MongoDB query
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+
       const query: any = {
-        user: userId,
-        _isDeleted: { $ne: true }
+        user: userObjectId
+        // Don't filter out deleted items - we need to sync them to other devices
       };
 
       if (lastSyncTime) {
         query._lastModified = { $gt: lastSyncTime };
       }
 
+      console.log('🔍 Query:', JSON.stringify(query));
+
       let entities: any[] = [];
       let totalCount = 0;
 
       if (!entityType || entityType === 'expense') {
+        console.log('📦 Fetching expenses...');
         const expenses = await Expense
           .find(query)
           .populate('category', 'title icon color type')
@@ -55,11 +69,13 @@ export class SyncService {
           .skip(offset)
           .lean();
 
+        console.log(`✅ Found ${expenses.length} expenses`);
         entities = [...entities, ...expenses.map(exp => ({ ...exp, _entityType: 'expense' }))];
         totalCount += await Expense.countDocuments(query);
       }
 
       if (!entityType || entityType === 'category') {
+        console.log('📦 Fetching categories...');
         const categories = await Category
           .find(query)
           .sort({ _lastModified: -1 })
@@ -67,20 +83,31 @@ export class SyncService {
           .skip(offset)
           .lean();
 
+        console.log(`✅ Found ${categories.length} categories`);
         entities = [...entities, ...categories.map(cat => ({ ...cat, _entityType: 'category' }))];
         totalCount += await Category.countDocuments(query);
       }
 
+      console.log('📦 Fetching conflicts...');
       // Get conflicts for this user
       const conflicts = await this.getConflicts(userId);
+      console.log(`✅ Found ${conflicts.length} conflicts`);
 
+      console.log('📦 Updating sync metadata...');
       // Update sync metadata
-      await this.updateSyncMetadata(userId, {
-        lastSyncTime: new Date(),
-        totalEntities: totalCount,
-        pendingCount: 0,
-        conflictCount: conflicts.length
-      });
+      try {
+        await this.updateSyncMetadata(userId, {
+          lastSyncTime: new Date(),
+          totalEntities: totalCount,
+          pendingCount: 0,
+          conflictCount: conflicts.length
+        });
+        console.log('✅ Sync metadata updated');
+      } catch (metadataError) {
+        console.error('⚠️ Failed to update metadata, but continuing:', metadataError);
+      }
+
+      console.log('✅ Pull data completed successfully, preparing response...');
 
       return {
         entities: entities.sort((a, b) => new Date(b._lastModified).getTime() - new Date(a._lastModified).getTime()),
@@ -91,7 +118,7 @@ export class SyncService {
       };
 
     } catch (error) {
-      console.error('Sync pull error:', error);
+      console.error('❌ Sync pull error:', error);
       throw new Error('Failed to pull sync data');
     }
   }
@@ -121,6 +148,7 @@ export class SyncService {
     const { _entityType, _id, _clientId, _version, _lastModified, ...entityData } = entity;
 
     try {
+      const userObjectId = new mongoose.Types.ObjectId(userId);
       let existingEntity: any = null;
       let Model: any;
 
@@ -128,11 +156,11 @@ export class SyncService {
       switch (_entityType) {
         case 'expense':
           Model = Expense;
-          existingEntity = await Model.findOne({ _id, user: userId });
+          existingEntity = await Model.findOne({ _id, user: userObjectId });
           break;
         case 'category':
           Model = Category;
-          existingEntity = await Model.findOne({ _id, user: userId });
+          existingEntity = await Model.findOne({ _id, user: userObjectId });
           break;
         default:
           throw new Error(`Unknown entity type: ${_entityType}`);
@@ -169,9 +197,10 @@ export class SyncService {
   }
 
   private async handleCreate(Model: any, data: any, userId: string, clientId?: string): Promise<void> {
+    const userObjectId = new mongoose.Types.ObjectId(userId);
     const entity = new Model({
       ...data,
-      user: userId,
+      user: userObjectId,
       _clientId: clientId,
       _syncStatus: 'synced',
       _lastModified: new Date(),
@@ -182,8 +211,9 @@ export class SyncService {
   }
 
   private async handleUpdate(Model: any, id: string, userId: string, data: any, version: number): Promise<void> {
+    const userObjectId = new mongoose.Types.ObjectId(userId);
     await Model.updateOne(
-      { _id: id, user: userId },
+      { _id: id, user: userObjectId },
       {
         ...data,
         _syncStatus: 'synced',
@@ -194,8 +224,9 @@ export class SyncService {
   }
 
   private async handleDelete(Model: any, id: string, userId: string): Promise<void> {
+    const userObjectId = new mongoose.Types.ObjectId(userId);
     await Model.updateOne(
-      { _id: id, user: userId },
+      { _id: id, user: userObjectId },
       {
         _isDeleted: true,
         _syncStatus: 'synced',
@@ -210,6 +241,7 @@ export class SyncService {
     const { entityId, entityType, resolution, mergedData } = request;
 
     try {
+      const userObjectId = new mongoose.Types.ObjectId(userId);
       let Model: any;
       let data: any;
 
@@ -225,7 +257,7 @@ export class SyncService {
       }
 
       // Get the current entity
-      const entity = await Model.findOne({ _id: entityId, user: userId });
+      const entity = await Model.findOne({ _id: entityId, user: userObjectId });
       if (!entity) {
         throw new Error('Entity not found');
       }
@@ -244,7 +276,7 @@ export class SyncService {
 
       // Update entity
       await Model.updateOne(
-        { _id: entityId, user: userId },
+        { _id: entityId, user: userObjectId },
         {
           ...data,
           _syncStatus: 'synced',
@@ -262,7 +294,7 @@ export class SyncService {
         serverData: entity._conflictData,
         resolution,
         mergedData,
-        user: userId
+        user: userObjectId
       });
 
       return true;
@@ -275,8 +307,9 @@ export class SyncService {
 
   async getConflicts(userId: string): Promise<any[]> {
     try {
+      const userObjectId = new mongoose.Types.ObjectId(userId);
       const conflicts = await ConflictResolution
-        .find({ user: userId })
+        .find({ user: userObjectId })
         .sort({ timestamp: -1 })
         .lean();
 
@@ -292,11 +325,12 @@ export class SyncService {
 
   async getSyncMetadata(userId: string): Promise<any> {
     try {
-      let metadata = await SyncMetadata.findOne({ user: userId });
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+      let metadata = await SyncMetadata.findOne({ user: userObjectId });
 
       if (!metadata) {
         metadata = await SyncMetadata.create({
-          user: userId,
+          user: userObjectId,
           lastSyncTime: new Date(),
           totalEntities: 0,
           pendingCount: 0,
@@ -317,8 +351,9 @@ export class SyncService {
 
   async updateSyncMetadata(userId: string, updates: Partial<any>): Promise<void> {
     try {
+      const userObjectId = new mongoose.Types.ObjectId(userId);
       await SyncMetadata.updateOne(
-        { user: userId },
+        { user: userObjectId },
         { ...updates, updatedAt: new Date() },
         { upsert: true }
       );

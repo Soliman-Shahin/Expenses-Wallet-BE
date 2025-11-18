@@ -30,7 +30,7 @@ export const trackSyncOperation = (req: Request, res: Response, next: NextFuncti
       console.log(`Sync operation: ${req.method} ${req.path} - User: ${userId} - Duration: ${duration}ms - Status: ${res.statusCode}`);
       
       // Update sync metadata if it's a sync endpoint
-      if (req.path.startsWith('/sync/') && res.statusCode < 400) {
+      if ((req.path.includes('/sync/') || req.originalUrl?.includes('/sync/')) && res.statusCode < 400) {
         // This would be handled by the sync service
         console.log(`Sync operation completed successfully for user: ${userId}`);
       }
@@ -44,7 +44,7 @@ export const trackSyncOperation = (req: Request, res: Response, next: NextFuncti
  * Middleware to handle sync errors
  */
 export const handleSyncError = (error: any, req: Request, res: Response, next: NextFunction) => {
-  if (req.path.startsWith('/sync/')) {
+  if (req.path.includes('/sync/') || req.originalUrl?.includes('/sync/')) {
     console.error('Sync error:', error);
     
     // Update sync metadata with error
@@ -68,7 +68,10 @@ export const handleSyncError = (error: any, req: Request, res: Response, next: N
  * Middleware to validate sync data
  */
 export const validateSyncData = (req: Request, res: Response, next: NextFunction) => {
-  if (req.path.startsWith('/sync/push') || req.path.startsWith('/sync/bulk')) {
+  const isSyncPush = req.path.includes('/sync/push') || req.originalUrl?.includes('/sync/push');
+  const isSyncBulk = req.path.includes('/sync/bulk') || req.originalUrl?.includes('/sync/bulk');
+  
+  if (isSyncPush || isSyncBulk) {
     const { entities } = req.body;
     
     if (!entities || !Array.isArray(entities)) {
@@ -106,7 +109,7 @@ export const rateLimitSync = (maxRequests: number = 100, windowMs: number = 15 *
   const requests = new Map<string, { count: number; resetTime: number }>();
   
   return (req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith('/sync/')) {
+    if (req.path.includes('/sync/') || req.originalUrl?.includes('/sync/')) {
       const userId = (req as any).user?._id;
       const now = Date.now();
       const key = `sync_${userId}`;
@@ -134,7 +137,7 @@ export const rateLimitSync = (maxRequests: number = 100, windowMs: number = 15 *
  * Middleware to compress sync responses
  */
 export const compressSyncResponse = (req: Request, res: Response, next: NextFunction) => {
-  if (req.path.startsWith('/sync/')) {
+  if (req.path.includes('/sync/') || req.originalUrl?.includes('/sync/')) {
     // Set compression headers
     res.setHeader('Content-Encoding', 'gzip');
     res.setHeader('Vary', 'Accept-Encoding');
@@ -147,7 +150,7 @@ export const compressSyncResponse = (req: Request, res: Response, next: NextFunc
  * Middleware to add sync headers
  */
 export const addSyncHeaders = (req: Request, res: Response, next: NextFunction) => {
-  if (req.path.startsWith('/sync/')) {
+  if (req.path.includes('/sync/') || req.originalUrl?.includes('/sync/')) {
     res.setHeader('X-Sync-Version', '1.0.0');
     res.setHeader('X-Sync-Timestamp', new Date().toISOString());
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');

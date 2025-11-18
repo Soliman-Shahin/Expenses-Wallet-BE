@@ -12,7 +12,7 @@ import {
   uploadAvatar,
 } from "../controllers";
 import { verifyAccessToken } from "../middleware/access.middleware";
-import { validateRequest, verifySession } from "../middleware";
+import { validateRequestWithJoi, verifySession } from "../middleware";
 import { loginSchema, signUpSchema } from "../validations/user.validation";
 import multer from "multer";
 
@@ -23,8 +23,8 @@ const upload = multer({
 });
 
 // Routes for local authentication
-router.post("/signup", validateRequest(signUpSchema), signUp);
-router.post("/login", validateRequest(loginSchema), login);
+router.post("/signup", validateRequestWithJoi(signUpSchema), signUp);
+router.post("/login", validateRequestWithJoi(loginSchema), login);
 router.post("/refresh-token", refreshToken);
 
 // Native Google Sign-In (Android/iOS) using idToken from Capacitor plugin

@@ -3,13 +3,23 @@ import { Types } from "mongoose";
 
 export class CategoryService {
   static async createCategory(data: any, userId: string) {
-    const category = new Category({ ...data, user: userId });
+    const category = new Category({
+      ...data,
+      user: userId,
+      _syncStatus: 'synced',
+      _lastModified: new Date(),
+      _version: 1,
+      _isDeleted: false
+    });
     return category.save();
   }
 
   static async getCategories(query: any, userId: string) {
     const { q, type, page = 1, limit = 10, sort = "order" } = query;
-    const filter: Record<string, any> = { user: userId };
+    const filter: Record<string, any> = {
+      user: userId,
+      _isDeleted: { $ne: true } // Exclude deleted items from normal queries
+    };
     if (q) filter.title = { $regex: q, $options: "i" };
     if (type) filter.type = type;
     const sortField = sort.startsWith("-") ? sort.substring(1) : sort;
@@ -27,13 +37,28 @@ export class CategoryService {
   }
 
   static async getCategoryById(id: string, userId: string) {
-    return Category.findOne({ _id: id, user: userId }).populate("user", "name");
+    return Category.findOne({
+      _id: id,
+      user: userId,
+      _isDeleted: { $ne: true }
+    }).populate("user", "name");
   }
 
   static async updateCategory(id: string, data: any, userId: string) {
+    const category = await Category.findOne({ _id: id, user: userId });
+    if (!category) return null;
+
+    const currentVersion = category._version || 0;
+    
     return Category.findOneAndUpdate(
       { _id: id, user: userId },
-      { ...data, modified: new Date() },
+      {
+        ...data,
+        modified: new Date(),
+        _syncStatus: 'synced',
+        _lastModified: new Date(),
+        _version: currentVersion + 1
+      },
       { new: true }
     );
   }
@@ -49,7 +74,16 @@ export class CategoryService {
       throw new Error("The default category cannot be deleted.");
     }
 
-    return category.deleteOne();
+    // Soft delete for sync purposes
+    return Category.findOneAndUpdate(
+      { _id: id, user: userId },
+      {
+        _isDeleted: true,
+        _syncStatus: 'synced',
+        _lastModified: new Date()
+      },
+      { new: true }
+    );
   }
 
   static async updateOrder(
@@ -62,9 +96,16 @@ export class CategoryService {
           _id: new Types.ObjectId(category.id),
           user: new Types.ObjectId(userId),
         },
-        update: { $set: { order: category.order } },
+        update: {
+          $set: {
+            order: category.order,
+            _syncStatus: 'synced',
+            _lastModified: new Date()
+          },
+          $inc: { _version: 1 }
+        } as any, // Type assertion to bypass strict typing for bulkWrite
       },
     }));
-    return Category.bulkWrite(bulkOps);
+    return Category.bulkWrite(bulkOps as any);
   }
 }

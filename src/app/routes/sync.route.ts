@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { syncController } from '../controllers/sync.controller';
-import { verifySession } from '../middleware/auth.middleware';
+import { verifyAccessToken } from '../middleware/access.middleware';
 import { validateRequest } from '../middleware/validation.middleware';
 import { body, query } from 'express-validator';
 
 const router = Router();
 
-// Apply auth middleware to all routes
-router.use(verifySession);
+// Apply JWT auth middleware to all sync routes
+router.use(verifyAccessToken);
 
 // ==================== SYNC DATA ROUTES ====================
 
