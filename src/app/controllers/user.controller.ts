@@ -112,7 +112,11 @@ const refreshToken = async (req: CustomRequest, res: Response) => {
     // Expose in headers as well
     res.setHeader("access-token", accessToken);
     res.setHeader("refresh-token", newRefreshToken);
-    res.status(200).json({ accessToken, refreshToken: newRefreshToken });
+    sendSuccess(
+      res,
+      { accessToken, refreshToken: newRefreshToken },
+      "Token refreshed successfully"
+    );
   } catch (error: any) {
     sendError(res, error.message, 401);
   }

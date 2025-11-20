@@ -7,6 +7,7 @@ interface ApiResponse<T> {
   error?: {
     code?: string;
     message: string;
+    details?: any;
   };
 }
 
@@ -28,14 +29,22 @@ export const sendError = (
   res: Response,
   errorMessage: string,
   statusCode = 500,
-  errorCode?: string
+  errorCode?: string,
+  details?: any
 ) => {
+  const error: ApiResponse<null>["error"] = {
+    code: errorCode,
+    message: errorMessage,
+  };
+
+  if (details !== undefined) {
+    error.details = details;
+  }
+
   const response: ApiResponse<null> = {
     success: false,
-    error: {
-      code: errorCode,
-      message: errorMessage,
-    },
+    error,
   };
+
   res.status(statusCode).json(response);
 };

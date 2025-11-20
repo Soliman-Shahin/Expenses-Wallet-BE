@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { SyncService } from '../services/sync.service';
+import { sendError } from '../shared/helper';
 
 export interface SyncRequest extends Request {
   syncService?: SyncService;
@@ -54,11 +55,10 @@ export const handleSyncError = (error: any, req: Request, res: Response, next: N
       console.log(`Sync error recorded for user: ${userId}`);
     }
     
-    res.status(500).json({
-      success: false,
-      message: 'Sync operation failed',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
+    const isDev = process.env.NODE_ENV === 'development';
+    const message = isDev && error?.message ? String(error.message) : 'Sync operation failed';
+
+    sendError(res, message, 500, 'SYNC_OPERATION_FAILED');
   } else {
     next(error);
   }
@@ -75,26 +75,32 @@ export const validateSyncData = (req: Request, res: Response, next: NextFunction
     const { entities } = req.body;
     
     if (!entities || !Array.isArray(entities)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid sync data: entities must be an array'
-      });
+      return sendError(
+        res,
+        'Invalid sync data: entities must be an array',
+        400,
+        'SYNC_INVALID_DATA'
+      );
     }
     
     // Validate each entity
     for (const entity of entities) {
       if (!entity._entityType || !entity._id) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid sync data: each entity must have _entityType and _id'
-        });
+        return sendError(
+          res,
+          'Invalid sync data: each entity must have _entityType and _id',
+          400,
+          'SYNC_INVALID_DATA'
+        );
       }
       
       if (!['expense', 'category', 'user'].includes(entity._entityType)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid sync data: _entityType must be expense, category, or user'
-        });
+        return sendError(
+          res,
+          'Invalid sync data: _entityType must be expense, category, or user',
+          400,
+          'SYNC_INVALID_DATA'
+        );
       }
     }
   }
@@ -119,11 +125,14 @@ export const rateLimitSync = (maxRequests: number = 100, windowMs: number = 15 *
       if (!userRequests || now > userRequests.resetTime) {
         requests.set(key, { count: 1, resetTime: now + windowMs });
       } else if (userRequests.count >= maxRequests) {
-        return res.status(429).json({
-          success: false,
-          message: 'Too many sync requests. Please try again later.',
-          retryAfter: Math.ceil((userRequests.resetTime - now) / 1000)
-        });
+        const retryAfter = Math.ceil((userRequests.resetTime - now) / 1000);
+        return sendError(
+          res,
+          'Too many sync requests. Please try again later.',
+          429,
+          'SYNC_RATE_LIMIT',
+          { retryAfter }
+        );
       } else {
         userRequests.count++;
       }

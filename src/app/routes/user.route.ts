@@ -2,6 +2,7 @@ import { Request, RequestHandler, Response, Router } from "express";
 import passport from "passport";
 import { User } from "../models/user.model";
 import https from "https";
+import { sendSuccess } from "../shared/helper";
 import {
   login,
   signUp,
@@ -132,12 +133,14 @@ router.post(
       const rawUser = (user as any).toJSON ? (user as any).toJSON() : user;
       const { password, sessions, ...safeUser } = rawUser;
 
-      return res.status(200).json({
-        data: {
+      return sendSuccess(
+        res,
+        {
           user: safeUser,
           tokens: { accessToken, refreshToken },
         },
-      });
+        "Authentication successful"
+      );
     } catch (err) {
       return res.status(500).json({ message: "Authentication processing error" });
     }

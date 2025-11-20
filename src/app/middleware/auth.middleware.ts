@@ -1,6 +1,7 @@
 import { NextFunction, Response } from 'express';
 import { User, UserDocument } from '../models';
 import { CustomRequest } from '../types/custom-request';
+import { sendError } from '../shared/helper';
 
 export const verifySession = async (
   req: CustomRequest,
@@ -33,6 +34,6 @@ export const verifySession = async (
       throw new Error('Refresh token has expired or the session is invalid');
     }
   } catch (error: any) {
-    res.status(401).send({ error: error.message });
+    sendError(res, error.message, 401, 'SESSION_INVALID');
   }
 };
