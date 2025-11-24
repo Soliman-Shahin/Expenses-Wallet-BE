@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from "express";
 import {
   encryptAdvanced,
   decryptAdvanced,
+  encryptFieldsDeep,
+  decryptFieldsDeep,
 } from "../shared/encryption-advanced";
 
 /**
@@ -28,9 +30,9 @@ interface EncryptionOptions {
 const defaultOptions: EncryptionOptions = {
   excludePaths: ["/health", "/v1/health", "/favicon.ico"],
   includePaths: [
-    "/v1/users/login",
-    "/v1/users/signup",
-    "/v1/users/me",
+    "/v1/user/login",
+    "/v1/user/signup",
+    "/v1/user/me",
     "/v1/expenses",
     "/v1/categories",
     "/v1/sync",
@@ -74,6 +76,11 @@ function isAlreadyEncrypted(data: any): boolean {
 /**
  * Create encryption middleware with custom options
  */
+const SENSITIVE_FIELDS = ["id", "_id"];
+
+/**
+ * Create encryption middleware with custom options
+ */
 export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
   const options = { ...defaultOptions, ...customOptions };
 
@@ -86,30 +93,26 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
     }
 
     // ============================================
-    // DECRYPT INCOMING REQUEST BODY
+    // DECRYPT INCOMING REQUEST BODY (Field Level)
     // ============================================
-    if (req.body && req.body.encrypted && req.body.data) {
+    if (req.body && typeof req.body === "object") {
       try {
-        const decrypted = decryptAdvanced(req.body.data);
-        if (decrypted) {
-          req.body = decrypted;
-        } else {
-          console.warn("⚠️  Failed to decrypt request body, using original");
-        }
+        // Recursively decrypt sensitive fields if they are encrypted
+        req.body = decryptFieldsDeep(req.body, SENSITIVE_FIELDS);
       } catch (error) {
-        console.error("❌ Request decryption error:", error);
-        // Don't fail the request, just log the error
+        console.error("❌ Request field decryption error:", error);
+        // Continue with original body if decryption fails
       }
     }
 
     // ============================================
-    // ENCRYPT OUTGOING RESPONSE BODY
+    // ENCRYPT OUTGOING RESPONSE BODY (Field Level)
     // ============================================
     const originalJson = res.json.bind(res);
 
     res.json = function (body: any): Response {
-      // Skip encryption for errors or if already encrypted
-      if (!body || isAlreadyEncrypted(body)) {
+      // Skip encryption for errors
+      if (!body) {
         return originalJson(body);
       }
 
@@ -123,14 +126,11 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
       }
 
       try {
-        // Encrypt the response
-        const encrypted = encryptAdvanced(body);
-        return originalJson({
-          encrypted: true,
-          data: encrypted,
-        });
+        // Recursively encrypt sensitive fields
+        const encryptedBody = encryptFieldsDeep(body, SENSITIVE_FIELDS);
+        return originalJson(encryptedBody);
       } catch (error) {
-        console.error("❌ Response encryption error:", error);
+        console.error("❌ Response field encryption error:", error);
         // Fall back to unencrypted response
         return originalJson(body);
       }

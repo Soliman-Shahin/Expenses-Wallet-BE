@@ -1,12 +1,16 @@
-import { Expense } from '../models/expense.model';
-import { Category } from '../models/category.model';
-import { User } from '../models/user.model';
-import { SyncOperation, ConflictResolution, SyncMetadata } from '../models/sync.model';
-import mongoose from 'mongoose';
+import { Expense } from "../models/expense.model";
+import { Category } from "../models/category.model";
+import { User } from "../models/user.model";
+import {
+  SyncOperation,
+  ConflictResolution,
+  SyncMetadata,
+} from "../models/sync.model";
+import mongoose from "mongoose";
 
 export interface SyncRequest {
   lastSyncTime?: Date;
-  entityType?: 'expense' | 'category' | 'user';
+  entityType?: "expense" | "outcome" | "category" | "user";
   limit?: number;
   offset?: number;
 }
@@ -22,271 +26,437 @@ export interface SyncResponse {
 export interface ConflictResolutionRequest {
   entityId: string;
   entityType: string;
-  resolution: 'local' | 'server' | 'merge';
+  resolution: "local" | "server" | "merge";
   mergedData?: any;
 }
 
+/**
+ * 🔄 Sync Service - Professional Backend Implementation
+ *
+ * المسؤوليات:
+ * 1. معالجة طلبات المزامنة من العميل (Pull & Push)
+ * 2. إدارة التعارضات
+ * 3. تتبع metadata المزامنة
+ */
 export class SyncService {
-  constructor() { }
+  constructor() {}
 
-  // ==================== SYNC DATA PULL ====================
+  // ==================== PULL DATA FROM CLIENT ====================
 
+  /**
+   * 📥 Pull البيانات للعميل
+   * يرجع كل البيانات المعدلة بعد lastSyncTime
+   */
   async pullData(userId: string, request: SyncRequest): Promise<SyncResponse> {
     const { lastSyncTime, entityType, limit = 50, offset = 0 } = request;
 
-    console.log('📥 Pull data request:', { userId, lastSyncTime, entityType, limit, offset });
+    console.log("📥 [SYNC] Pull request:", {
+      userId,
+      lastSyncTime,
+      entityType,
+      limit,
+      offset,
+    });
 
     try {
       if (!userId) {
-        console.error('❌ No userId provided to pullData');
-        throw new Error('User ID is required');
+        throw new Error("User ID is required");
       }
 
-      // Convert userId string to ObjectId for MongoDB query
+      // Convert userId to ObjectId
       const userObjectId = new mongoose.Types.ObjectId(userId);
 
+      // Build query
       const query: any = {
-        user: userObjectId
-        // Don't filter out deleted items - we need to sync them to other devices
+        user: userObjectId,
+        // لا نفلتر _isDeleted لأننا نحتاج إرسال العناصر المحذوفة للمزامنة
       };
 
+      // Filter by lastSyncTime if provided
       if (lastSyncTime) {
-        query._lastModified = { $gt: lastSyncTime };
+        const syncDate = new Date(lastSyncTime);
+        query.$or = [
+          { _lastModified: { $gt: syncDate } },
+          { updatedAt: { $gt: syncDate } },
+          { createdAt: { $gt: syncDate } },
+        ];
       }
 
-      console.log('🔍 Query:', JSON.stringify(query));
+      console.log("🔍 [SYNC] Query:", JSON.stringify(query));
 
       let entities: any[] = [];
       let totalCount = 0;
 
-      if (!entityType || entityType === 'expense') {
-        console.log('📦 Fetching expenses...');
-        const expenses = await Expense
-          .find(query)
-          .populate('category', 'title icon color type')
-          .sort({ _lastModified: -1 })
+      // Fetch Expenses (or Outcomes)
+      if (!entityType || entityType === "expense" || entityType === "outcome") {
+        console.log("💰 [SYNC] Fetching expenses...");
+
+        const expenses = await Expense.find(query)
+          .populate("category", "title icon color type")
+          .sort({ _lastModified: -1, updatedAt: -1 })
           .limit(limit)
           .skip(offset)
-          .lean();
+          .lean()
+          .exec();
 
-        console.log(`✅ Found ${expenses.length} expenses`);
-        entities = [...entities, ...expenses.map(exp => ({ ...exp, _entityType: 'expense' }))];
+        console.log(`✅ [SYNC] Found ${expenses.length} expenses`);
+
+        entities = [
+          ...entities,
+          ...expenses.map((exp) => ({
+            ...exp,
+            _entityType: "expense",
+            _lastModified: exp._lastModified || exp.updatedAt || exp.createdAt,
+          })),
+        ];
+
         totalCount += await Expense.countDocuments(query);
       }
 
-      if (!entityType || entityType === 'category') {
-        console.log('📦 Fetching categories...');
-        const categories = await Category
-          .find(query)
-          .sort({ _lastModified: -1 })
+      // Fetch Categories
+      if (!entityType || entityType === "category") {
+        console.log("📁 [SYNC] Fetching categories...");
+
+        const categories = await Category.find(query)
+          .sort({ _lastModified: -1, updatedAt: -1 })
           .limit(limit)
           .skip(offset)
-          .lean();
+          .lean()
+          .exec();
 
-        console.log(`✅ Found ${categories.length} categories`);
-        entities = [...entities, ...categories.map(cat => ({ ...cat, _entityType: 'category' }))];
+        console.log(`✅ [SYNC] Found ${categories.length} categories`);
+
+        entities = [
+          ...entities,
+          ...categories.map((cat) => ({
+            ...cat,
+            _entityType: "category",
+            _lastModified: cat._lastModified || cat.updatedAt || cat.createdAt,
+          })),
+        ];
+
         totalCount += await Category.countDocuments(query);
       }
 
-      console.log('📦 Fetching conflicts...');
-      // Get conflicts for this user
+      // Fetch conflicts
+      console.log("⚠️ [SYNC] Fetching conflicts...");
       const conflicts = await this.getConflicts(userId);
-      console.log(`✅ Found ${conflicts.length} conflicts`);
+      console.log(`✅ [SYNC] Found ${conflicts.length} conflicts`);
 
-      console.log('📦 Updating sync metadata...');
       // Update sync metadata
       try {
         await this.updateSyncMetadata(userId, {
           lastSyncTime: new Date(),
           totalEntities: totalCount,
           pendingCount: 0,
-          conflictCount: conflicts.length
+          conflictCount: conflicts.length,
         });
-        console.log('✅ Sync metadata updated');
+        console.log("✅ [SYNC] Metadata updated");
       } catch (metadataError) {
-        console.error('⚠️ Failed to update metadata, but continuing:', metadataError);
+        console.warn("⚠️ [SYNC] Failed to update metadata:", metadataError);
       }
 
-      console.log('✅ Pull data completed successfully, preparing response...');
+      // Sort entities by modification date (newest first)
+      entities.sort((a, b) => {
+        const dateA = new Date(
+          a._lastModified || a.updatedAt || a.createdAt
+        ).getTime();
+        const dateB = new Date(
+          b._lastModified || b.updatedAt || b.createdAt
+        ).getTime();
+        return dateB - dateA;
+      });
 
-      return {
-        entities: entities.sort((a, b) => new Date(b._lastModified).getTime() - new Date(a._lastModified).getTime()),
+      const response: SyncResponse = {
+        entities,
         conflicts,
         lastSyncTime: new Date(),
         hasMore: entities.length === limit,
-        totalCount
+        totalCount,
       };
 
-    } catch (error) {
-      console.error('❌ Sync pull error:', error);
-      throw new Error('Failed to pull sync data');
+      console.log("✅ [SYNC] Pull completed:", {
+        entitiesCount: entities.length,
+        conflictsCount: conflicts.length,
+        totalCount,
+        hasMore: response.hasMore,
+      });
+
+      return response;
+    } catch (error: any) {
+      console.error("❌ [SYNC] Pull error:", error);
+      throw new Error(`Failed to pull sync data: ${error.message}`);
     }
   }
 
-  // ==================== SYNC DATA PUSH ====================
+  // ==================== PUSH DATA FROM CLIENT ====================
 
-  async pushData(userId: string, entities: any[]): Promise<{ success: boolean; conflicts: any[] }> {
+  /**
+   * 📤 استقبال البيانات من العميل
+   * معالجة التغييرات وإرجاع النتيجة والتعارضات
+   */
+  async pushData(
+    userId: string,
+    entities: any[]
+  ): Promise<{ success: boolean; conflicts: any[]; processed: number }> {
+    console.log(
+      `📤 [SYNC] Push request: ${entities.length} entities from user ${userId}`
+    );
+
     const conflicts: any[] = [];
+    let processed = 0;
 
     try {
       for (const entity of entities) {
-        const result = await this.processEntity(userId, entity);
-        if (result.conflict) {
-          conflicts.push(result.entity);
+        try {
+          const result = await this.processEntity(userId, entity);
+
+          if (result.conflict) {
+            conflicts.push(result.entity);
+            console.log(
+              `⚠️ [SYNC] Conflict detected for ${entity._entityType}:${entity._id}`
+            );
+          } else {
+            processed++;
+          }
+        } catch (error: any) {
+          console.error(
+            `❌ [SYNC] Error processing entity ${entity._id}:`,
+            error
+          );
+          // Continue processing other entities
         }
       }
 
-      return { success: true, conflicts };
+      console.log(
+        `✅ [SYNC] Push completed: ${processed} processed, ${conflicts.length} conflicts`
+      );
 
-    } catch (error) {
-      console.error('Sync push error:', error);
-      throw new Error('Failed to push sync data');
+      return {
+        success: true,
+        conflicts,
+        processed,
+      };
+    } catch (error: any) {
+      console.error("❌ [SYNC] Push error:", error);
+      throw new Error(`Failed to push sync data: ${error.message}`);
     }
   }
 
-  private async processEntity(userId: string, entity: any): Promise<{ conflict: boolean; entity: any }> {
-    const { _entityType, _id, _clientId, _version, _lastModified, ...entityData } = entity;
+  /**
+   * معالجة entity واحدة
+   */
+  private async processEntity(
+    userId: string,
+    entity: any
+  ): Promise<{ conflict: boolean; entity: any }> {
+    const {
+      _entityType,
+      _id,
+      _version,
+      _lastModified,
+      _isDeleted,
+      ...entityData
+    } = entity;
+
+    console.log(`🔄 [SYNC] Processing ${_entityType}:${_id}...`);
 
     try {
       const userObjectId = new mongoose.Types.ObjectId(userId);
-      let existingEntity: any = null;
       let Model: any;
 
-      // Determine the model based on entity type
+      // Determine model
       switch (_entityType) {
-        case 'expense':
+        case "expense":
+        case "outcome":
           Model = Expense;
-          existingEntity = await Model.findOne({ _id, user: userObjectId });
           break;
-        case 'category':
+        case "category":
           Model = Category;
-          existingEntity = await Model.findOne({ _id, user: userObjectId });
           break;
         default:
           throw new Error(`Unknown entity type: ${_entityType}`);
       }
 
+      // Find existing entity
+      const existingEntity = await Model.findOne({ _id, user: userObjectId });
+
       // Check for conflicts
       if (existingEntity && this.hasConflict(existingEntity, entity)) {
-        return { conflict: true, entity: { ...entity, _conflictData: existingEntity } };
+        console.log(`⚠️ [SYNC] Conflict for ${_entityType}:${_id}`);
+        return {
+          conflict: true,
+          entity: { ...entity, _conflictData: existingEntity.toObject() },
+        };
       }
 
-      // Process based on operation type
-      if (entity._isDeleted) {
+      // Process based on operation
+      if (_isDeleted) {
         await this.handleDelete(Model, _id, userId);
+        console.log(`🗑️ [SYNC] Deleted ${_entityType}:${_id}`);
       } else if (existingEntity) {
-        await this.handleUpdate(Model, _id, userId, entityData, _version);
+        await this.handleUpdate(Model, _id, userId, entityData, _version || 1);
+        console.log(`✏️ [SYNC] Updated ${_entityType}:${_id}`);
       } else {
-        await this.handleCreate(Model, entityData, userId, _clientId);
+        await this.handleCreate(Model, entityData, userId, _id);
+        console.log(`🆕 [SYNC] Created ${_entityType}:${_id}`);
       }
 
       return { conflict: false, entity };
-
-    } catch (error) {
-      console.error(`Error processing ${_entityType} entity:`, error);
+    } catch (error: any) {
+      console.error(`❌ [SYNC] Error processing ${_entityType}:${_id}:`, error);
       throw error;
     }
   }
 
+  /**
+   * التحقق من وجود تعارض
+   */
   private hasConflict(existing: any, incoming: any): boolean {
-    // Check if the incoming data is older than existing data
-    const existingTime = new Date(existing._lastModified || existing.updatedAt).getTime();
+    const existingTime = new Date(
+      existing._lastModified || existing.updatedAt
+    ).getTime();
     const incomingTime = new Date(incoming._lastModified).getTime();
+    const existingVersion = existing._version || 0;
+    const incomingVersion = incoming._version || 0;
 
-    return existingTime > incomingTime && existing._version > (incoming._version || 0);
+    // Conflict if server version is newer
+    return existingTime > incomingTime && existingVersion > incomingVersion;
   }
 
-  private async handleCreate(Model: any, data: any, userId: string, clientId?: string): Promise<void> {
+  /**
+   * إنشاء entity جديدة
+   */
+  private async handleCreate(
+    Model: any,
+    data: any,
+    userId: string,
+    entityId?: string
+  ): Promise<void> {
     const userObjectId = new mongoose.Types.ObjectId(userId);
-    const entity = new Model({
+
+    const entityData: any = {
       ...data,
       user: userObjectId,
-      _clientId: clientId,
-      _syncStatus: 'synced',
+      _syncStatus: "synced",
       _lastModified: new Date(),
-      _version: 1
-    });
+      _version: 1,
+    };
 
+    // Use provided ID if available
+    if (entityId) {
+      entityData._id = entityId;
+    }
+
+    const entity = new Model(entityData);
     await entity.save();
   }
 
-  private async handleUpdate(Model: any, id: string, userId: string, data: any, version: number): Promise<void> {
+  /**
+   * تحديث entity موجودة
+   */
+  private async handleUpdate(
+    Model: any,
+    id: string,
+    userId: string,
+    data: any,
+    version: number
+  ): Promise<void> {
     const userObjectId = new mongoose.Types.ObjectId(userId);
+
     await Model.updateOne(
       { _id: id, user: userObjectId },
       {
-        ...data,
-        _syncStatus: 'synced',
-        _lastModified: new Date(),
-        _version: (version || 0) + 1
+        $set: {
+          ...data,
+          _syncStatus: "synced",
+          _lastModified: new Date(),
+          _version: version + 1,
+        },
       }
     );
   }
 
-  private async handleDelete(Model: any, id: string, userId: string): Promise<void> {
+  /**
+   * حذف entity (soft delete)
+   */
+  private async handleDelete(
+    Model: any,
+    id: string,
+    userId: string
+  ): Promise<void> {
     const userObjectId = new mongoose.Types.ObjectId(userId);
+
     await Model.updateOne(
       { _id: id, user: userObjectId },
       {
-        _isDeleted: true,
-        _syncStatus: 'synced',
-        _lastModified: new Date()
+        $set: {
+          _isDeleted: true,
+          _syncStatus: "synced",
+          _lastModified: new Date(),
+        },
       }
     );
   }
 
   // ==================== CONFLICT RESOLUTION ====================
 
-  async resolveConflict(userId: string, request: ConflictResolutionRequest): Promise<boolean> {
+  async resolveConflict(
+    userId: string,
+    request: ConflictResolutionRequest
+  ): Promise<boolean> {
     const { entityId, entityType, resolution, mergedData } = request;
+
+    console.log(
+      `🔧 [SYNC] Resolving conflict for ${entityType}:${entityId} with strategy: ${resolution}`
+    );
 
     try {
       const userObjectId = new mongoose.Types.ObjectId(userId);
       let Model: any;
-      let data: any;
 
       switch (entityType) {
-        case 'expense':
+        case "expense":
+        case "outcome":
           Model = Expense;
           break;
-        case 'category':
+        case "category":
           Model = Category;
           break;
         default:
           throw new Error(`Unknown entity type: ${entityType}`);
       }
 
-      // Get the current entity
       const entity = await Model.findOne({ _id: entityId, user: userObjectId });
       if (!entity) {
-        throw new Error('Entity not found');
+        throw new Error("Entity not found");
       }
 
-      // Apply resolution
-      if (resolution === 'local') {
-        // Keep local data (do nothing)
-        data = entity.toObject();
-      } else if (resolution === 'server') {
-        // Use server data (update with server data)
-        data = entity._conflictData || entity.toObject();
-      } else if (resolution === 'merge') {
-        // Use merged data
-        data = mergedData || entity.toObject();
+      let resolvedData: any;
+
+      if (resolution === "local") {
+        resolvedData = entity.toObject();
+      } else if (resolution === "server") {
+        resolvedData = entity._conflictData || entity.toObject();
+      } else if (resolution === "merge") {
+        resolvedData = mergedData || entity.toObject();
       }
 
       // Update entity
       await Model.updateOne(
         { _id: entityId, user: userObjectId },
         {
-          ...data,
-          _syncStatus: 'synced',
-          _lastModified: new Date(),
-          _version: (entity._version || 0) + 1,
-          _conflictData: undefined
+          $set: {
+            ...resolvedData,
+            _syncStatus: "synced",
+            _lastModified: new Date(),
+            _version: (entity._version || 0) + 1,
+          },
+          $unset: { _conflictData: 1 },
         }
       );
 
-      // Record conflict resolution
+      // Record resolution
       await ConflictResolution.create({
         entityId,
         entityType,
@@ -294,29 +464,28 @@ export class SyncService {
         serverData: entity._conflictData,
         resolution,
         mergedData,
-        user: userObjectId
+        user: userObjectId,
       });
 
+      console.log(`✅ [SYNC] Conflict resolved for ${entityType}:${entityId}`);
       return true;
-
-    } catch (error) {
-      console.error('Conflict resolution error:', error);
-      throw new Error('Failed to resolve conflict');
+    } catch (error: any) {
+      console.error("❌ [SYNC] Conflict resolution error:", error);
+      throw new Error(`Failed to resolve conflict: ${error.message}`);
     }
   }
 
   async getConflicts(userId: string): Promise<any[]> {
     try {
       const userObjectId = new mongoose.Types.ObjectId(userId);
-      const conflicts = await ConflictResolution
-        .find({ user: userObjectId })
+      const conflicts = await ConflictResolution.find({ user: userObjectId })
         .sort({ timestamp: -1 })
+        .limit(50)
         .lean();
 
       return conflicts;
-
     } catch (error) {
-      console.error('Get conflicts error:', error);
+      console.error("❌ [SYNC] Get conflicts error:", error);
       return [];
     }
   }
@@ -337,59 +506,81 @@ export class SyncService {
           conflictCount: 0,
           errorCount: 0,
           isOnline: true,
-          isSyncing: false
+          isSyncing: false,
         });
       }
 
-      return metadata;
-
-    } catch (error) {
-      console.error('Get sync metadata error:', error);
-      throw new Error('Failed to get sync metadata');
+      return metadata.toObject();
+    } catch (error: any) {
+      console.error("❌ [SYNC] Get metadata error:", error);
+      throw new Error(`Failed to get sync metadata: ${error.message}`);
     }
   }
 
-  async updateSyncMetadata(userId: string, updates: Partial<any>): Promise<void> {
+  async updateSyncMetadata(
+    userId: string,
+    updates: Partial<any>
+  ): Promise<void> {
     try {
       const userObjectId = new mongoose.Types.ObjectId(userId);
+
       await SyncMetadata.updateOne(
         { user: userObjectId },
-        { ...updates, updatedAt: new Date() },
+        {
+          $set: {
+            ...updates,
+            updatedAt: new Date(),
+          },
+        },
         { upsert: true }
       );
-
-    } catch (error) {
-      console.error('Update sync metadata error:', error);
-      throw new Error('Failed to update sync metadata');
+    } catch (error: any) {
+      console.error("❌ [SYNC] Update metadata error:", error);
+      throw new Error(`Failed to update sync metadata: ${error.message}`);
     }
   }
 
   // ==================== BULK OPERATIONS ====================
 
-  async bulkSync(userId: string, entities: any[]): Promise<{ success: boolean; results: any[] }> {
+  async bulkSync(
+    userId: string,
+    entities: any[]
+  ): Promise<{ success: boolean; results: any[] }> {
+    console.log(`📦 [SYNC] Bulk sync: ${entities.length} entities`);
+
     const results: any[] = [];
 
     try {
       for (const entity of entities) {
         try {
           const result = await this.processEntity(userId, entity);
-          results.push({ success: true, entity: result.entity, conflict: result.conflict });
+          results.push({
+            success: true,
+            entity: result.entity,
+            conflict: result.conflict,
+          });
         } catch (error: any) {
-          results.push({ success: false, entity, error: error.message });
+          results.push({
+            success: false,
+            entity,
+            error: error.message,
+          });
         }
       }
 
       return { success: true, results };
-
     } catch (error: any) {
-      console.error('Bulk sync error:', error);
-      throw new Error('Failed to perform bulk sync');
+      console.error("❌ [SYNC] Bulk sync error:", error);
+      throw new Error(`Failed to perform bulk sync: ${error.message}`);
     }
   }
 
   // ==================== CLEANUP ====================
 
-  async cleanupOldSyncData(userId: string, olderThanDays: number = 30): Promise<void> {
+  async cleanupOldSyncData(
+    userId: string,
+    olderThanDays: number = 30
+  ): Promise<void> {
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
@@ -398,18 +589,19 @@ export class SyncService {
       await SyncOperation.deleteMany({
         user: userId,
         timestamp: { $lt: cutoffDate },
-        status: 'synced'
+        status: "synced",
       });
 
       // Clean up old conflict resolutions
       await ConflictResolution.deleteMany({
         user: userId,
-        timestamp: { $lt: cutoffDate }
+        timestamp: { $lt: cutoffDate },
       });
 
+      console.log(`🧹 [SYNC] Cleaned up data older than ${olderThanDays} days`);
     } catch (error: any) {
-      console.error('Cleanup sync data error:', error);
-      throw new Error('Failed to cleanup sync data');
+      console.error("❌ [SYNC] Cleanup error:", error);
+      throw new Error(`Failed to cleanup sync data: ${error.message}`);
     }
   }
 }

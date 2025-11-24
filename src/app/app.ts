@@ -15,7 +15,7 @@ import {
 import { corsOptions } from "./config/corsConfig";
 import "./config/passport-config";
 import dotenv from "dotenv";
-import { encryptionMiddleware } from "./middleware/encryption.middleware";
+import { advancedEncryptionMiddleware } from "./middleware/encryption-advanced.middleware";
 
 dotenv.config();
 function configureExpressApp(): express.Application {
@@ -56,7 +56,7 @@ function configureExpressApp(): express.Application {
   app.use(cookieParser());
 
   // Encryption Middleware
-  app.use(encryptionMiddleware);
+  app.use(advancedEncryptionMiddleware);
 
   // Sync middleware
   app.use(trackSyncOperation);

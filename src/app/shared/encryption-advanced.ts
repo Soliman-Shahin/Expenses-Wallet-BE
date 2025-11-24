@@ -32,8 +32,15 @@ function getEncryptionKey(): Buffer {
     return crypto.scryptSync("ExpensesWalletSecretKey2024", "salt", 32);
   }
 
-  // Derive a 32-byte key from the environment variable
-  return crypto.scryptSync(key, "expenses-wallet-salt", 32);
+  // Derive a 32-byte key from the environment variable using PBKDF2
+  // This matches the Web Crypto API implementation in the frontend
+  return crypto.pbkdf2Sync(
+    key,
+    "expenses-wallet-salt",
+    100000, // Iterations
+    32, // Key length (32 bytes = 256 bits)
+    "sha256" // Digest
+  );
 }
 
 const ENCRYPTION_KEY = getEncryptionKey();
@@ -183,4 +190,94 @@ export default {
   generateToken: generateSecureToken,
   encryptFields,
   decryptFields,
+  encryptFieldsDeep,
+  decryptFieldsDeep,
 };
+
+/**
+ * Recursively encrypt specific fields in an object
+ * @param obj - Object containing fields to encrypt
+ * @param fieldsToEncrypt - Array of field names to encrypt
+ */
+export function encryptFieldsDeep<T extends any>(
+  obj: T,
+  fieldsToEncrypt: string[]
+): T {
+  if (!obj || typeof obj !== "object") {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) =>
+      encryptFieldsDeep(item, fieldsToEncrypt)
+    ) as unknown as T;
+  }
+
+  const result = { ...obj } as any;
+
+  for (const key in result) {
+    if (Object.prototype.hasOwnProperty.call(result, key)) {
+      if (fieldsToEncrypt.includes(key)) {
+        // Encrypt this field if it's not already encrypted
+        const value = result[key];
+        if (
+          value !== undefined &&
+          value !== null &&
+          typeof value !== "string" // Assuming encrypted values are strings
+        ) {
+          result[key] = encryptAdvanced(value);
+        } else if (typeof value === "string" && !value.includes(":")) {
+          // If it's a string but doesn't look like our encryption format, encrypt it
+          // Note: This is a heuristic. Ideally we'd have a stricter check.
+          result[key] = encryptAdvanced(value);
+        }
+      } else if (typeof result[key] === "object") {
+        // Recurse
+        result[key] = encryptFieldsDeep(result[key], fieldsToEncrypt);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Recursively decrypt specific fields in an object
+ * @param obj - Object containing encrypted fields
+ * @param fieldsToDecrypt - Array of field names to decrypt
+ */
+export function decryptFieldsDeep<T extends any>(
+  obj: T,
+  fieldsToDecrypt: string[]
+): T {
+  if (!obj || typeof obj !== "object") {
+    return obj;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map((item) =>
+      decryptFieldsDeep(item, fieldsToDecrypt)
+    ) as unknown as T;
+  }
+
+  const result = { ...obj } as any;
+
+  for (const key in result) {
+    if (Object.prototype.hasOwnProperty.call(result, key)) {
+      if (fieldsToDecrypt.includes(key)) {
+        const value = result[key];
+        if (typeof value === "string" && value.includes(":")) {
+          const decrypted = decryptAdvanced(value);
+          if (decrypted !== null) {
+            result[key] = decrypted;
+          }
+        }
+      } else if (typeof result[key] === "object") {
+        // Recurse
+        result[key] = decryptFieldsDeep(result[key], fieldsToDecrypt);
+      }
+    }
+  }
+
+  return result;
+}
