@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "expenses-wallet-be",
-  "version": "1.0.0",
-  "description": "",
+  "version": "2.0.0",
+  "description": "Secure backend API for Expenses Wallet with advanced encryption and monitoring",
   "main": "app/server.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

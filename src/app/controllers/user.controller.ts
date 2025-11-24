@@ -4,6 +4,17 @@ import { CustomRequest } from "../types/custom-request";
 import { UserService } from "../services/user.service";
 import { User, Category } from "../models";
 import bcrypt from "bcryptjs";
+import { validatePassword } from "../services/password-validation.service";
+import {
+  recordFailedLogin,
+  resetLoginAttempts,
+} from "../middleware/brute-force.middleware";
+import {
+  ConflictError,
+  InvalidCredentialsError,
+  ValidationError,
+} from "../shared/errors";
+import logger from "../services/logger.service";
 
 const { SALT_ROUNDS } = process.env;
 type UserCredentials = { email: string; password: string };
@@ -12,53 +23,114 @@ type UserCredentials = { email: string; password: string };
 const signUp = async (req: CustomRequest, res: Response) => {
   try {
     const { email, password } = req.body as UserCredentials;
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      throw new ValidationError("Password validation failed", {
+        errors: passwordValidation.errors,
+        suggestions: passwordValidation.suggestions,
+        strength: passwordValidation.strength,
+        score: passwordValidation.score,
+      });
+    }
+
     // Check if user exists
     const existingUser = await UserService.validateUserCredentials(
       email,
       password
     ).catch(() => null);
+
     if (existingUser) {
-      return sendError(res, "Email already used", 409);
+      throw new ConflictError("Email already used");
     }
+
     const hashedPassword = await bcrypt.hash(password, Number(SALT_ROUNDS));
+
     // Create user
     const user = await UserService.createUser(email, hashedPassword);
+
+    // Log user creation
+    logger.info("New user registered", { userId: user._id.toString(), email });
+
     // Create a default category for the new user
     await Category.create({
-      title: 'Uncategorized',
-      icon: 'help-circle-outline',
-      color: '#9E9E9E',
-      type: 'outcome',
+      title: "Uncategorized",
+      icon: "help-circle-outline",
+      color: "#9E9E9E",
+      type: "outcome",
       user: user._id,
       isDefault: true,
     });
+
     // Generate tokens
     const accessToken = await UserService.generateAccessToken(user);
     const refreshToken = await UserService.generateRefreshToken();
     await UserService.addRefreshToken(user, refreshToken);
+
     // Also return tokens in headers for legacy frontend compatibility
     res.setHeader("access-token", accessToken);
     res.setHeader("refresh-token", refreshToken);
+
     sendSuccess(res, { user, accessToken, refreshToken }, "Signup successful");
   } catch (error: any) {
-    sendError(res, error.message);
+    const context = {
+      ip: req.ip || req.socket.remoteAddress,
+      method: req.method,
+      path: req.path,
+    };
+    logger.error("Signup failed", error, context);
+    sendError(res, error.message, error.statusCode || 500, error.code);
   }
 };
 
 // POST /users/login
 const login = async (req: CustomRequest, res: Response) => {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+
   try {
     const { email, password } = req.body as UserCredentials;
+
+    // Validate user credentials
     const user = await UserService.validateUserCredentials(email, password);
+
+    // Reset login attempts on successful login
+    resetLoginAttempts(email, ip);
+
+    // Log successful login
+    logger.info("User logged in", {
+      userId: user._id.toString(),
+      email,
+      ip,
+    });
+
     const accessToken = await UserService.generateAccessToken(user);
     const refreshToken = await UserService.generateRefreshToken();
     await UserService.addRefreshToken(user, refreshToken);
+
     // Also return tokens in headers for legacy frontend compatibility
     res.setHeader("access-token", accessToken);
     res.setHeader("refresh-token", refreshToken);
+
     sendSuccess(res, { user, accessToken, refreshToken }, "Login successful");
   } catch (error: any) {
-    sendError(res, error.message, 401);
+    // Record failed login attempt
+    const email = req.body?.email;
+    if (email) {
+      recordFailedLogin(email, ip);
+    }
+
+    const context = {
+      ip: req.ip || req.socket.remoteAddress,
+      method: req.method,
+      path: req.path,
+    };
+    logger.warn("Login failed", context, {
+      email,
+      reason: error.message,
+    });
+
+    throw new InvalidCredentialsError();
   }
 };
 
