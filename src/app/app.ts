@@ -3,6 +3,7 @@ import passport from "passport";
 import session from "express-session";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import compression from "compression";
 import routes from "./routes";
 import { errorHandler } from "./middleware/error-handler";
 import {
@@ -16,21 +17,31 @@ import { corsOptions } from "./config/corsConfig";
 import "./config/passport-config";
 import dotenv from "dotenv";
 import { advancedEncryptionMiddleware } from "./middleware/encryption-advanced.middleware";
+import mongoSanitize from "express-mongo-sanitize";
+import { requestLogger } from "./middleware/request-logger.middleware";
 
 dotenv.config();
 function configureExpressApp(): express.Application {
   const app = express();
   const isProduction = process.env.NODE_ENV === "production";
-  const sessionSecret = process.env.SECRET_KEY || process.env.JWT_SECRET;
+  const sessionSecret = process.env.SECRET_KEY;
 
   if (!sessionSecret) {
-    console.warn(
-      "[server]: SESSION secret is not set. Please set SECRET_KEY or JWT_SECRET in environment variables."
+    throw new Error(
+      "[server]: SECRET_KEY is required for session management. " +
+      "Please set it in your .env file. " +
+      "Generate a secure key with: node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\""
     );
   }
 
   // Needed for secure cookies when behind a proxy (Railway/Render/Heroku)
   app.set("trust proxy", 1);
+
+  // Enable gzip compression for all responses
+  app.use(compression());
+
+  // Request/Response logging
+  app.use(requestLogger);
 
   app.use(
     session({
@@ -51,11 +62,22 @@ function configureExpressApp(): express.Application {
 
   app.use(cors(corsOptions));
   app.options("*", cors(corsOptions));
+  
+  // Add COOP headers to allow OAuth popup communication
+  app.use((req, res, next) => {
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    next();
+  });
+  
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   app.use(cookieParser());
+  
+  // Sanitize data to prevent NoSQL injection
+  app.use(mongoSanitize());
 
-  // Encryption Middleware
+  // Encryption Middleware (supports both full payload and field-level encryption)
   app.use(advancedEncryptionMiddleware);
 
   // Sync middleware

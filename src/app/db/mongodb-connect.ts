@@ -1,5 +1,6 @@
 import mongoose, { Connection } from "mongoose";
 import dotenv from "dotenv";
+import logger from "../utils/logger";
 
 // Initialize dotenv to use environment variables
 dotenv.config();
@@ -41,7 +42,7 @@ class Database {
   public async connect(): Promise<void> {
     if (!this.connection || this.connection.readyState === 0) {
       try {
-        console.log("[database]: Connecting to MongoDB...");
+        logger.info("[database]: Connecting to MongoDB...");
         await mongoose.connect(this.config.uri, {});
         this.connection = mongoose.connection;
         this.connection.on("error", this.onError);
@@ -53,19 +54,19 @@ class Database {
   }
 
   private onError = (error: any): void => {
-    console.error("Error while attempting to connect to MongoDB:", error);
+    logger.error("Error while attempting to connect to MongoDB:", error);
     process.exit(1);
   };
 
   // Error handler for database connection
   private handleError = (error: any): void => {
-    console.error("Error connecting to MongoDB:", error);
+    logger.error("Error connecting to MongoDB:", error);
     process.exit(1);
   };
 
   // Success handler for database connection
   private onOpen = (): void => {
-    console.log("[database]: Connected to MongoDB successfully!");
+    logger.info("[database]: Connected to MongoDB successfully!");
   };
 }
 

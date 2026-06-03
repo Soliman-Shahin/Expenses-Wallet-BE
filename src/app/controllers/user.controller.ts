@@ -15,9 +15,18 @@ import {
   ValidationError,
 } from "../shared/errors";
 import logger from "../services/logger.service";
+import {
+  UserCredentials,
+  UserUpdatePayload,
+  UserResponse,
+  UploadedFile,
+  ErrorWithContext,
+} from "../types/user-types";
 
-const { SALT_ROUNDS } = process.env;
-type UserCredentials = { email: string; password: string };
+// Use higher salt rounds in production for better security
+const SALT_ROUNDS = process.env.NODE_ENV === 'production' 
+  ? 12 
+  : Number(process.env.SALT_ROUNDS) || 10;
 
 // POST /signup
 const signUp = async (req: CustomRequest, res: Response) => {
@@ -45,7 +54,7 @@ const signUp = async (req: CustomRequest, res: Response) => {
       throw new ConflictError("Email already used");
     }
 
-    const hashedPassword = await bcrypt.hash(password, Number(SALT_ROUNDS));
+    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
     // Create user
     const user = await UserService.createUser(email, hashedPassword);
@@ -73,14 +82,15 @@ const signUp = async (req: CustomRequest, res: Response) => {
     res.setHeader("refresh-token", refreshToken);
 
     sendSuccess(res, { user, accessToken, refreshToken }, "Signup successful");
-  } catch (error: any) {
+  } catch (error: unknown) {
     const context = {
       ip: req.ip || req.socket.remoteAddress,
       method: req.method,
       path: req.path,
     };
-    logger.error("Signup failed", error, context);
-    sendError(res, error.message, error.statusCode || 500, error.code);
+    const err = error as ErrorWithContext;
+    logger.error("Signup failed", err, context);
+    sendError(res, err.message || 'Signup failed', err.statusCode || 500, (err as any).code);
   }
 };
 
@@ -113,7 +123,7 @@ const login = async (req: CustomRequest, res: Response) => {
     res.setHeader("refresh-token", refreshToken);
 
     sendSuccess(res, { user, accessToken, refreshToken }, "Login successful");
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Record failed login attempt
     const email = req.body?.email;
     if (email) {
@@ -125,12 +135,14 @@ const login = async (req: CustomRequest, res: Response) => {
       method: req.method,
       path: req.path,
     };
+    const err = error as Error;
     logger.warn("Login failed", context, {
       email,
-      reason: error.message,
+      reason: err.message || 'Unknown error',
     });
 
-    throw new InvalidCredentialsError();
+    // Send error response instead of throwing
+    return sendError(res, "Invalid email or password", 401, "INVALID_CREDENTIALS");
   }
 };
 
@@ -144,8 +156,9 @@ const userAccessToken = async (req: CustomRequest, res: Response) => {
     // Mirror in header for clients that read headers
     res.setHeader("access-token", accessToken);
     sendSuccess(res, { accessToken }, "Access token generated successfully");
-  } catch (error: any) {
-    sendError(res, error.message);
+  } catch (error: unknown) {
+    const err = error as Error;
+    sendError(res, err.message || 'An error occurred');
   }
 };
 
@@ -189,8 +202,9 @@ const refreshToken = async (req: CustomRequest, res: Response) => {
       { accessToken, refreshToken: newRefreshToken },
       "Token refreshed successfully"
     );
-  } catch (error: any) {
-    sendError(res, error.message, 401);
+  } catch (error: unknown) {
+    const err = error as Error;
+    sendError(res, err.message || 'Token refresh failed', 401);
   }
 };
 
@@ -207,13 +221,14 @@ const getMe = async (
     const user = await User.findById(userId);
     if (!user) return sendError(res, "User not found", 404);
     // Normalize salary in response to array shape for legacy documents
-    const obj: any = user.toJSON();
+    const obj = user.toJSON() as UserResponse;
     if (typeof obj.salary === "number") {
       obj.salary = [{ label: "Salary", amount: obj.salary }];
     }
     return sendSuccess(res, obj, "User fetched successfully");
-  } catch (error: any) {
-    return sendError(res, error.message);
+  } catch (error: unknown) {
+    const err = error as Error;
+    return sendError(res, err.message || 'Failed to fetch user');
   }
 };
 
@@ -245,16 +260,18 @@ const updateMe = async (
       "image",
     ];
 
-    const updatePayload: any = {};
+    const updatePayload: Partial<UserUpdatePayload> = {};
     // Coerce numeric salary into array shape if provided
-    if (req.body && (req.body as any).salary !== undefined) {
-      const incoming = (req.body as any).salary;
+    if (req.body && req.body.salary !== undefined) {
+      const incoming = req.body.salary as number | Array<{ label: string; amount: number }>;
       if (typeof incoming === "number") {
         (req.body as any).salary = [{ label: "Salary", amount: incoming }];
       }
     }
     for (const key of allowed) {
-      if (req.body[key] !== undefined) updatePayload[key] = req.body[key];
+      if (req.body[key] !== undefined) {
+        (updatePayload as any)[key] = req.body[key];
+      }
     }
 
     const updated = await User.findByIdAndUpdate(userId, updatePayload, {
@@ -264,8 +281,9 @@ const updateMe = async (
 
     if (!updated) return sendError(res, "User not found", 404);
     return sendSuccess(res, updated, "User updated successfully");
-  } catch (error: any) {
-    return sendError(res, error.message);
+  } catch (error: unknown) {
+    const err = error as Error;
+    return sendError(res, err.message || 'Failed to update user');
   }
 };
 
@@ -273,16 +291,16 @@ export { getMe, updateMe };
 
 // POST /user/me/avatar
 const uploadAvatar = async (
-  req: CustomRequest & { user_id?: string; file?: any; files?: any[] },
+  req: CustomRequest & { user_id?: string; file?: UploadedFile; files?: UploadedFile[] },
   res: Response
 ) => {
   try {
     const userId = req.user_id;
     if (!userId) return sendError(res, "Unauthorized", 401);
-    let file: any = (req as any).file;
+    let file: UploadedFile | undefined = req.file;
     if (
       !file &&
-      Array.isArray((req as any).files) &&
+      Array.isArray(req.files) &&
       (req as any).files.length > 0
     ) {
       file = (req as any).files[0];
@@ -306,8 +324,9 @@ const uploadAvatar = async (
       { avatarUrl: updated.image, user: updated },
       "Avatar updated"
     );
-  } catch (error: any) {
-    return sendError(res, error.message);
+  } catch (error: unknown) {
+    const err = error as Error;
+    return sendError(res, err.message || 'Failed to upload avatar');
   }
 };
 

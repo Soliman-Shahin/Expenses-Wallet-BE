@@ -5,6 +5,7 @@ import {
   encryptFieldsDeep,
   decryptFieldsDeep,
 } from "../shared/encryption-advanced";
+import { decryptCryptoJS, isCryptoJSFormat } from "../shared/encryption-cryptojs-compat";
 
 /**
  * Enhanced Encryption Middleware with Selective Encryption
@@ -33,6 +34,8 @@ const defaultOptions: EncryptionOptions = {
     "/v1/user/login",
     "/v1/user/signup",
     "/v1/user/me",
+    "/v1/user/auth/google/native",
+    "/v1/user/auth/facebook/native",
     "/v1/expenses",
     "/v1/categories",
     "/v1/sync",
@@ -93,14 +96,50 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
     }
 
     // ============================================
-    // DECRYPT INCOMING REQUEST BODY (Field Level)
+    // DECRYPT INCOMING REQUEST BODY
     // ============================================
     if (req.body && typeof req.body === "object") {
+      console.log("🔍 [Encryption Middleware] Request body:", JSON.stringify(req.body).substring(0, 200));
+      
       try {
-        // Recursively decrypt sensitive fields if they are encrypted
-        req.body = decryptFieldsDeep(req.body, SENSITIVE_FIELDS);
+        // Check if Frontend sent full payload encryption: { data: "encrypted_string" }
+        if (req.body.data && typeof req.body.data === "string" && !req.body.email && !req.body.password) {
+          console.log("🔍 [Encryption Middleware] Detected encrypted payload");
+          console.log("🔍 [Encryption Middleware] Data preview:", req.body.data.substring(0, 50));
+          
+          // Full payload encryption from Frontend (CryptoJS format)
+          try {
+            // Check if it's CryptoJS format (from Frontend)
+            if (isCryptoJSFormat(req.body.data)) {
+              console.log("✅ [Encryption Middleware] CryptoJS format detected");
+              const decrypted = decryptCryptoJS(req.body.data);
+              if (decrypted) {
+                req.body = decrypted;
+                console.log("✅ [Encryption Middleware] CryptoJS decryption successful");
+                console.log("🔍 [Encryption Middleware] Decrypted body:", JSON.stringify(req.body));
+              }
+            } else {
+              console.log("🔍 [Encryption Middleware] Trying AES-256-GCM format");
+              // Try AES-256-GCM format (advanced encryption)
+              const decrypted = decryptAdvanced(req.body.data);
+              if (decrypted) {
+                req.body = typeof decrypted === 'string' ? JSON.parse(decrypted) : decrypted;
+                console.log("✅ [Encryption Middleware] Advanced decryption successful");
+              }
+            }
+          } catch (decryptError: unknown) {
+            console.error("❌ [Encryption Middleware] Full payload decryption failed:", decryptError);
+            const err = decryptError as Error;
+            console.error("❌ [Encryption Middleware] Error details:", err.message || 'Unknown error');
+            // Fall through to field-level decryption
+          }
+        } else {
+          console.log("🔍 [Encryption Middleware] No encrypted payload detected, using field-level");
+          // Field-level encryption (original behavior)
+          req.body = decryptFieldsDeep(req.body, SENSITIVE_FIELDS);
+        }
       } catch (error) {
-        console.error("❌ Request field decryption error:", error);
+        console.error("❌ [Encryption Middleware] Request decryption error:", error);
         // Continue with original body if decryption fails
       }
     }
@@ -111,6 +150,11 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
     const originalJson = res.json.bind(res);
 
     res.json = function (body: any): Response {
+      // TEMPORARILY DISABLED - Response encryption off for debugging
+      console.log("📤 [Encryption Middleware] Sending unencrypted response");
+      return originalJson(body);
+      
+      /* Original encryption code - commented out for debugging
       // Skip encryption for errors
       if (!body) {
         return originalJson(body);
@@ -134,6 +178,7 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
         // Fall back to unencrypted response
         return originalJson(body);
       }
+      */
     };
 
     next();

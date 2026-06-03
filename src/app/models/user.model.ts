@@ -12,13 +12,18 @@ enum SignupType {
 }
 
 const TOKEN_SETTINGS = {
-  CUSTOM_JWT: "51778657246321226641fsdklafjasdkljfsklfjd7148924065",
   EXPIRATION_TIME: "1h",
-  ALGORITHM: "HS256",
+  ALGORITHM: "HS256" as const,
   LENGTH: 64,
 };
 
-const jwtSecret = process.env.ACCESS_TOKEN_SECRET ?? TOKEN_SETTINGS.CUSTOM_JWT;
+// Validate that ACCESS_TOKEN_SECRET is set
+const jwtSecret = process.env.ACCESS_TOKEN_SECRET;
+if (!jwtSecret) {
+  throw new Error(
+    'ACCESS_TOKEN_SECRET is required in environment variables. Please set it in your .env file.'
+  );
+}
 
 interface IUserSession {
   token: string;
@@ -70,7 +75,7 @@ const UserSchema = new Schema<UserDocument>(
     password: {
       type: String,
       // Only require password for normal signups
-      required: function (this: any) {
+      required: function (this: UserDocument) {
         return this.signupType === SignupType.Normal;
       },
       minlength: 8,
@@ -99,6 +104,14 @@ const UserSchema = new Schema<UserDocument>(
   },
   { timestamps: true }
 );
+
+// *** Indexes for performance ***
+// Index on email for fast user lookup during login/signup
+UserSchema.index({ email: 1 });
+// Index on socialId for OAuth lookups
+UserSchema.index({ socialId: 1 }, { sparse: true });
+// Compound index for session token lookups
+UserSchema.index({ _id: 1, 'sessions.token': 1 });
 
 // *** Instance methods ***
 UserSchema.methods.toJSON = function () {
@@ -129,7 +142,7 @@ UserSchema.methods.createRefreshToken = async function (): Promise<string> {
   return buf.toString("hex");
 };
 
-UserSchema.methods.createSession = async function (): Promise<string> {
+UserSchema.methods.createSession = async function (this: UserDocument): Promise<string> {
   const refreshToken = await this.createRefreshToken();
   await saveSessionToDatabase(this, refreshToken);
   return refreshToken;
@@ -152,7 +165,7 @@ UserSchema.statics.hasRefreshTokenExpired = function (
 };
 
 /* HELPER METHODS */
-const saveSessionToDatabase = async (user: any, refreshToken: any) => {
+const saveSessionToDatabase = async (user: UserDocument, refreshToken: string): Promise<string> => {
   // This function saves a session to the database
   // It takes the user document and the refresh token as parameters
   // It updates the user document with the refresh token and its expiration time

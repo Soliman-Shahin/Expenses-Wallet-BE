@@ -3,6 +3,7 @@ import passport from "passport";
 import { User } from "../models/user.model";
 import https from "https";
 import { sendSuccess } from "../shared/helper";
+import logger from "../utils/logger";
 import {
   login,
   signUp,
@@ -45,10 +46,15 @@ router.post("/refresh-token", refreshToken);
 // Native Google Sign-In (Android/iOS) using idToken from Capacitor plugin
 router.post("/auth/google/native", async (req: Request, res: Response) => {
   try {
+    logger.debug("[Google Native] Request body:", JSON.stringify(req.body).substring(0, 200));
+    
     const { idToken } = req.body || {};
     if (!idToken || typeof idToken !== "string") {
+      logger.error("[Google Native] Missing or invalid idToken");
       return res.status(400).json({ message: "idToken is required" });
     }
+    
+    logger.info("[Google Native] idToken received, length:", idToken.length);
 
     // Verify idToken with Google tokeninfo (with fetch fallback)
     const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(
@@ -60,7 +66,7 @@ router.post("/auth/google/native", async (req: Request, res: Response) => {
       if (typeof fetchFn === "function") {
         const resp = await fetchFn(url);
         if (!resp.ok) {
-          console.warn("[google/native] tokeninfo resp not ok", resp.status);
+          logger.warn("[google/native] tokeninfo resp not ok", resp.status);
           return res.status(401).json({ message: "Invalid Google idToken" });
         }
         info = await resp.json();
@@ -77,7 +83,7 @@ router.post("/auth/google/native", async (req: Request, res: Response) => {
                   if ((r.statusCode || 0) >= 200 && (r.statusCode || 0) < 300) {
                     resolve(json);
                   } else {
-                    console.warn(
+                    logger.warn(
                       "[google/native] https tokeninfo bad status",
                       r.statusCode
                     );
@@ -92,14 +98,14 @@ router.post("/auth/google/native", async (req: Request, res: Response) => {
         });
       }
     } catch (e) {
-      console.error("[google/native] tokeninfo fetch error", e);
+      logger.error("[google/native] tokeninfo fetch error", e);
       return res.status(500).json({ message: "Token verification failed" });
     }
 
     // Optional audience check if env is set
     const expectedAud = process.env.GOOGLE_WEB_CLIENT_ID;
     if (expectedAud && info?.aud !== expectedAud) {
-      console.warn("[google/native] audience mismatch", {
+      logger.warn("[google/native] audience mismatch", {
         aud: info?.aud,
         expectedAud,
       });
@@ -114,7 +120,7 @@ router.post("/auth/google/native", async (req: Request, res: Response) => {
     const picture = (info?.picture as string) || undefined;
 
     if (!sub || !email) {
-      console.warn("[google/native] missing fields", {
+      logger.warn("[google/native] missing fields", {
         hasSub: !!sub,
         hasEmail: !!email,
       });
@@ -169,8 +175,17 @@ router.post("/auth/google/native", async (req: Request, res: Response) => {
       },
       "Authentication successful"
     );
-  } catch (err) {
-    return res.status(500).json({ message: "Authentication processing error" });
+  } catch (err: unknown) {
+    const error = err as Error;
+    logger.error("[Google Native] Authentication error:", error);
+    logger.error("[Google Native] Error stack:", error.stack);
+    return res.status(500).json({ 
+      success: false,
+      error: {
+        message: "Authentication processing error",
+        details: error.message
+      }
+    });
   }
 });
 router.get(
@@ -226,120 +241,25 @@ router.get(
       const rawUser = user.toJSON ? user.toJSON() : user;
       const { password, sessions, ...safeUser } = rawUser;
 
-      // Prepare a minimal HTML that posts the tokens + user back to the opener (SPA)
+      // Encode payload as base64
       const payload = {
         user: safeUser,
         tokens: { accessToken, refreshToken },
       };
-
-      const mobileRedirect = process.env.MOBILE_OAUTH_REDIRECT || "";
-      const html = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Signing in…</title>
-  </head>
-  <body>
-    <script>
-      (function() {
-        try {
-          var data = ${JSON.stringify(payload)};
-          // Web/SPA popup flow
-          if (window.opener && typeof window.opener.postMessage === 'function') {
-            window.opener.postMessage({ type: 'google-auth-success', payload: data }, '*');
-          } else if ('${mobileRedirect}') {
-            // Mobile deep link fallback for Android/iOS
-            var b64 = btoa(JSON.stringify(data));
-            var target = '${mobileRedirect}'.replace(/[#?]*$/, '') + '#payload=' + encodeURIComponent(b64);
-            window.location.replace(target);
-          }
-        } catch (e) {
-          // noop
-        } finally {
-          window.close();
-        }
-      })();
-    </script>
-    You may close this window.
-  </body>
-</html>`;
-
-      res.setHeader("Content-Type", "text/html; charset=UTF-8");
-      return res.status(200).send(html);
+      const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64');
+      
+      // Redirect to frontend with payload in URL
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+      const redirectUrl = `${frontendUrl}/auth/callback?data=${encodeURIComponent(payloadB64)}`;
+      
+      return res.redirect(redirectUrl);
     } catch (err) {
-      return res.status(500).send("Authentication processing error");
+      logger.error("[Google OAuth Callback] Error:", err);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+      return res.redirect(`${frontendUrl}/auth/login?error=oauth_failed`);
     }
   }
 );
 
-// Facebook Authentication Routes (popup flow like Google)
-router.get(
-  "/facebook",
-  passport.authenticate("facebook", {
-    scope: ["email"],
-    session: false,
-  })
-);
-
-router.get(
-  "/auth/facebook/callback",
-  passport.authenticate("facebook", { failureRedirect: "/", session: false }),
-  async (req: Request, res: Response) => {
-    try {
-      const user: any = (req as any).user;
-      if (!user) {
-        return res.status(401).send("Authentication failed");
-      }
-
-      const refreshToken = await user.createSession();
-      const accessToken = await user.generateAccessAuthToken();
-
-      const rawUser = user.toJSON ? user.toJSON() : user;
-      const { password, sessions, ...safeUser } = rawUser;
-
-      const payload = {
-        user: safeUser,
-        tokens: { accessToken, refreshToken },
-      };
-
-      const mobileRedirect = process.env.MOBILE_OAUTH_REDIRECT || "";
-      const html = `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Signing in…</title>
-  </head>
-  <body>
-    <script>
-      (function() {
-        try {
-          var data = ${JSON.stringify(payload)};
-          if (window.opener && typeof window.opener.postMessage === 'function') {
-            window.opener.postMessage({ type: 'facebook-auth-success', payload: data }, '*');
-          } else if ('${mobileRedirect}') {
-            var b64 = btoa(JSON.stringify(data));
-            var target = '${mobileRedirect}'.replace(/[#?]*$/, '') + '#payload=' + encodeURIComponent(b64);
-            window.location.replace(target);
-          }
-        } catch (e) {
-          // noop
-        } finally {
-          window.close();
-        }
-      })();
-    </script>
-    You may close this window.
-  </body>
-</html>`;
-
-      res.setHeader("Content-Type", "text/html; charset=UTF-8");
-      return res.status(200).send(html);
-    } catch (err) {
-      return res.status(500).send("Authentication processing error");
-    }
-  }
-);
 
 export default router;

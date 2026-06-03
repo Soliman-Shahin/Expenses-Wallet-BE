@@ -87,6 +87,10 @@ categorySchema.pre(
 categorySchema.index({ user: 1, _lastModified: -1 });
 categorySchema.index({ user: 1, _syncStatus: 1 });
 categorySchema.index({ _clientId: 1 });
+// Index for filtering by user and type (income/outcome)
+categorySchema.index({ user: 1, type: 1 });
+// Index for ordering categories
+categorySchema.index({ user: 1, order: 1 });
 
 const Category = model<ICategory>("Category", categorySchema);
 export { Category };
