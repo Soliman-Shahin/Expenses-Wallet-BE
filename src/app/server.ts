@@ -12,7 +12,6 @@ const DEFAULT_PORT = 3000;
 function validateEnvironmentVariables(): void {
   const required = [
     'MONGO_URI',
-    'JWT_SECRET',
     'ACCESS_TOKEN_SECRET',
     'REFRESH_TOKEN_SECRET',
     'ENCRYPTION_KEY',
