@@ -35,6 +35,7 @@ export const requestLogger = (
   // Generate unique request ID
   const requestId = Math.random().toString(36).substr(2, 9);
   (req as any).id = requestId;
+  res.setHeader("X-Request-ID", requestId);
 
   // Log request start
   const context = {
