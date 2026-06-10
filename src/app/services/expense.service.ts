@@ -19,6 +19,7 @@ export class ExpenseService {
     filters?: {
       search?: string;
       category?: string;
+      categories?: string;
       type?: "income" | "outcome";
       startDate?: string;
       endDate?: string;
@@ -52,6 +53,11 @@ export class ExpenseService {
       // Category filter (convert to ObjectId if present)
       if (filters?.category) {
         query.category = new mongoose.Types.ObjectId(filters.category);
+      } else if (filters?.categories) {
+        const categoryIds = filters.categories
+          .split(",")
+          .map((id) => new mongoose.Types.ObjectId(id));
+        query.category = { $in: categoryIds };
       }
 
       const pipeline = [
@@ -121,6 +127,8 @@ export class ExpenseService {
     // Category filter
     if (filters?.category) {
       query.category = filters.category;
+    } else if (filters?.categories) {
+      query.category = { $in: filters.categories.split(",") };
     }
 
     const skip = filters?.skip || 0;

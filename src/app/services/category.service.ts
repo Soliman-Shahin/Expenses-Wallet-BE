@@ -87,13 +87,13 @@ export class CategoryService {
   }
 
   static async updateOrder(
-    categories: { id: string; order: number }[],
+    categories: { categoryId: string; order: number }[],
     userId: string
   ) {
     const bulkOps = categories.map((category) => ({
       updateOne: {
         filter: {
-          _id: new Types.ObjectId(category.id),
+          _id: new Types.ObjectId(category.categoryId),
           user: new Types.ObjectId(userId),
         },
         update: {
@@ -103,7 +103,7 @@ export class CategoryService {
             _lastModified: new Date()
           },
           $inc: { _version: 1 }
-        } as any, // Type assertion to bypass strict typing for bulkWrite
+        } as any,
       },
     }));
     return Category.bulkWrite(bulkOps as any);

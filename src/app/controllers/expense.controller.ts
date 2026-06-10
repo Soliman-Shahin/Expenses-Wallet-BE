@@ -16,15 +16,26 @@ export const createExpense = async (req: CustomRequest, res: Response) => {
 export const getExpenses = async (req: CustomRequest, res: Response) => {
   try {
     const user = req.user_id || "";
-    const { search, category, type, startDate, endDate, limit, skip } =
+    const { search, category, categories, type, startDate, endDate, limit, skip } =
       req.query;
+
+    let finalStartDate = startDate as string;
+    let finalEndDate = endDate as string;
+
+    // Default to current month if no dates are provided
+    if (!startDate && !endDate) {
+      const now = new Date();
+      finalStartDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      finalEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
+    }
 
     const filters = {
       search: search as string,
       category: category as string,
+      categories: categories as string,
       type: type as "income" | "outcome",
-      startDate: startDate as string,
-      endDate: endDate as string,
+      startDate: finalStartDate,
+      endDate: finalEndDate,
       limit: limit ? parseInt(limit as string) : undefined,
       skip: skip ? parseInt(skip as string) : undefined,
     };
