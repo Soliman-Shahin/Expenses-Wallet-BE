@@ -22,12 +22,8 @@ export const getExpenses = async (req: CustomRequest, res: Response) => {
     let finalStartDate = startDate as string;
     let finalEndDate = endDate as string;
 
-    // Default to current month if no dates are provided
-    if (!startDate && !endDate) {
-      const now = new Date();
-      finalStartDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      finalEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
-    }
+    // No longer defaulting to current month here to allow fetching all transactions
+    // The frontend should specify the dates if it wants them filtered.
 
     const filters = {
       search: search as string,
