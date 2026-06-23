@@ -1,4 +1,3 @@
-import logger from './logger.service';
 import { Request } from 'express';
 
 /**
@@ -153,11 +152,11 @@ class Logger {
 
     if (level >= this.minLevel) {
       if (level >= LogLevel.ERROR) {
-        logger.error(formatted);
+        console.error(formatted);
       } else if (level >= LogLevel.WARN) {
-        logger.warn(formatted);
+        console.warn(formatted);
       } else {
-        logger.info(formatted);
+        console.log(formatted);
       }
     }
   }

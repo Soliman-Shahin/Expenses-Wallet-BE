@@ -80,7 +80,7 @@ export function encryptAdvanced(data: any): string {
 
     return result;
   } catch (error) {
-    logger.error('❌ Encryption failed:', error);
+    logger.error('❌ Encryption failed:', error as Error);
     throw new Error('Encryption failed');
   }
 }
@@ -120,7 +120,7 @@ export function decryptAdvanced(encryptedData: string): any {
     // Parse and return
     return JSON.parse(decrypted);
   } catch (error) {
-    logger.error('❌ Decryption failed:', error);
+    logger.error('❌ Decryption failed:', error as Error);
     return null;
   }
 }

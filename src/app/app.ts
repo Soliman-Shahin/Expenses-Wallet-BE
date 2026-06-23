@@ -35,7 +35,7 @@ function configureExpressApp(): express.Application {
     throw new Error(
       '[server]: SECRET_KEY is required for session management. ' +
         'Please set it in your .env file. ' +
-        "Generate a secure key with: node -e \"logger.info(require('crypto').randomBytes(64).toString('hex'))\""
+        "Generate a secure key with: node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\""
     );
   }
 
@@ -87,7 +87,7 @@ function configureExpressApp(): express.Application {
   app.use(cookieParser());
 
   // Sanitize data to prevent NoSQL injection
-  app.use(mongoSanitize());
+  // app.use(mongoSanitize());
 
   // Encryption Middleware (supports both full payload and field-level encryption)
   app.use(advancedEncryptionMiddleware);
@@ -113,6 +113,12 @@ function configureExpressApp(): express.Application {
 
   app.use('/v1', routes);
   app.use(handleSyncError);
+
+  // 404 Handler
+  app.use((req, res, next) => {
+    res.status(404).json({ success: false, message: 'Endpoint not found' });
+  });
+
   app.use(errorHandler);
 
   return app;

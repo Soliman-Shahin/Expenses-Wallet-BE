@@ -85,10 +85,7 @@ export const requestLogger = (
     }
 
     // Call original end function
-    if (chunk) {
-      return originalEnd.call(this, chunk, encoding || 'utf8', callback);
-    }
-    return originalEnd.call(this, null, 'utf8', callback);
+    return originalEnd.apply(this, Array.from(arguments) as any);
   };
 
   next();

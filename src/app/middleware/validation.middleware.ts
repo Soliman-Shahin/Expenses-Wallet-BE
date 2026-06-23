@@ -34,7 +34,7 @@ export const validateRequest = (
 ) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    logger.error('❌ Validation errors:', errors.array());
+    logger.warn('❌ Validation errors:', undefined, errors.array());
     return sendError(
       res,
       'Validation failed',

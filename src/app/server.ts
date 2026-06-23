@@ -2,7 +2,6 @@ import logger from './services/logger.service';
 import { config } from 'dotenv';
 import { connectToDB } from './db';
 import { configureExpressApp } from './app';
-import logger from './utils/logger';
 
 const DEFAULT_PORT = 3000;
 
@@ -57,12 +56,12 @@ async function startServer() {
       logger.info(`[server]: Server is running at http://localhost:${port}`);
     });
   } catch (error) {
-    logger.error('Failed to start server:', error);
+    logger.error('Failed to start server:', error as Error);
     process.exit(1);
   }
 }
 
 startServer().catch((error) => {
-  logger.error('Failed to start server:', error);
+  logger.error('Failed to start server:', error as Error);
   process.exit(1);
 });

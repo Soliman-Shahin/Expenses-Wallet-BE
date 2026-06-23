@@ -20,11 +20,7 @@ function getEncryptionKey(): string {
     return 'TEMP_TRANSPORT_KEY';
   }
 
-  logger.info(
-    '🔑 [CryptoJS] Using ENCRYPTION_KEY from env (length:',
-    key.length,
-    ')'
-  );
+    logger.info(`🔑 [CryptoJS] Using ENCRYPTION_KEY from env (length: ${key.length})`);
   // Frontend uses TEMP_TRANSPORT_KEY, so we should too if ENCRYPTION_KEY is set to something else
   // For now, always use TEMP_TRANSPORT_KEY to match Frontend
   return 'TEMP_TRANSPORT_KEY';
@@ -47,7 +43,7 @@ export function encryptCryptoJS(data: any): string {
     );
     return encrypted.toString();
   } catch (error) {
-    logger.error('❌ CryptoJS encryption failed:', error);
+    logger.error('❌ CryptoJS encryption failed:', error as Error);
     throw new Error('Encryption failed');
   }
 }
@@ -61,17 +57,14 @@ export function decryptCryptoJS(encryptedData: string): any {
   if (!encryptedData) return null;
 
   try {
-    logger.info('🔑 [CryptoJS] Decrypting with key:', ENCRYPTION_KEY);
-    logger.info('🔍 [CryptoJS] Encrypted data length:', encryptedData.length);
+    logger.info(`🔑 [CryptoJS] Decrypting with key: ${ENCRYPTION_KEY}`);
+    logger.info(`🔍 [CryptoJS] Encrypted data length: ${encryptedData.length}`);
 
     const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
     const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
 
-    logger.info('🔍 [CryptoJS] Decrypted string length:', decryptedData.length);
-    logger.info(
-      '🔍 [CryptoJS] Decrypted preview:',
-      decryptedData.substring(0, 50)
-    );
+    logger.info(`🔍 [CryptoJS] Decrypted string length: ${decryptedData.length}`);
+    logger.info(`🔍 [CryptoJS] Decrypted preview: ${decryptedData.substring(0, 50)}`);
 
     if (!decryptedData) {
       throw new Error('Decryption returned empty string - wrong key?');
@@ -79,7 +72,7 @@ export function decryptCryptoJS(encryptedData: string): any {
 
     return JSON.parse(decryptedData);
   } catch (error) {
-    logger.error('❌ CryptoJS decryption failed:', error);
+    logger.error('❌ CryptoJS decryption failed:', error as Error);
     throw error;
   }
 }

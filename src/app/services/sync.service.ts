@@ -83,7 +83,7 @@ export class SyncService {
         ];
       }
 
-      logger.info('🔍 [SYNC] Query:', JSON.stringify(query));
+      logger.info(`🔍 [SYNC] Query: ${JSON.stringify(query)}`);
 
       let entities: any[] = [];
       let totalCount = 0;
@@ -154,7 +154,7 @@ export class SyncService {
         });
         logger.info('✅ [SYNC] Metadata updated');
       } catch (metadataError) {
-        logger.warn('⚠️ [SYNC] Failed to update metadata:', metadataError);
+        logger.warn('⚠️ [SYNC] Failed to update metadata:', undefined, metadataError);
       }
 
       // Sort entities by modification date (newest first)
@@ -486,7 +486,7 @@ export class SyncService {
 
       return conflicts;
     } catch (error) {
-      logger.error('❌ [SYNC] Get conflicts error:', error);
+      logger.error('❌ [SYNC] Get conflicts error:', error as Error);
       return [];
     }
   }

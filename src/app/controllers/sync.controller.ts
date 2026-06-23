@@ -56,7 +56,7 @@ export class SyncController {
       sendSuccess(res, result, 'Sync data pulled successfully');
       logger.info('✅ Response sent successfully');
     } catch (error) {
-      logger.error('❌ Error in pullData controller:', error);
+      logger.error('❌ Error in pullData controller:', error as Error);
       next(error);
     }
   }

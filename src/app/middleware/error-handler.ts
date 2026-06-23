@@ -8,6 +8,6 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
-  logger.error(err.stack);
+  logger.error(err.message, err);
   sendError(res, err.message || 'Something went wrong!', 500);
 };

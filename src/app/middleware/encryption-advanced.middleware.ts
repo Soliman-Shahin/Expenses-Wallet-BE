@@ -104,8 +104,7 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
     // ============================================
     if (req.body && typeof req.body === 'object') {
       logger.info(
-        '🔍 [Encryption Middleware] Request body:',
-        JSON.stringify(req.body).substring(0, 200)
+        `🔍 [Encryption Middleware] Request body: ${JSON.stringify(req.body).substring(0, 200)}`
       );
 
       try {
@@ -136,8 +135,7 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
                   '✅ [Encryption Middleware] CryptoJS decryption successful'
                 );
                 logger.info(
-                  '🔍 [Encryption Middleware] Decrypted body:',
-                  JSON.stringify(req.body)
+                  `🔍 [Encryption Middleware] Decrypted body: ${JSON.stringify(req.body)}`
                 );
               }
             } else {
@@ -159,12 +157,11 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
           } catch (decryptError: unknown) {
             logger.error(
               '❌ [Encryption Middleware] Full payload decryption failed:',
-              decryptError
+              decryptError as Error
             );
             const err = decryptError as Error;
             logger.error(
-              '❌ [Encryption Middleware] Error details:',
-              err.message || 'Unknown error'
+              `❌ [Encryption Middleware] Error details: ${err.message || 'Unknown error'}`
             );
             // Fall through to field-level decryption
           }
@@ -178,7 +175,7 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
       } catch (error) {
         logger.error(
           '❌ [Encryption Middleware] Request decryption error:',
-          error
+          error as Error
         );
         // Continue with original body if decryption fails
       }
