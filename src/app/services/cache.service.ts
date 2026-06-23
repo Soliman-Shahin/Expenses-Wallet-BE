@@ -3,21 +3,21 @@ import logger from '../utils/logger';
 
 /**
  * Cache Service
- * 
+ *
  * Simple in-memory caching layer using node-cache
- * 
+ *
  * Features:
  * - TTL (Time To Live) support
  * - Automatic cleanup
  * - Statistics tracking
- * 
+ *
  * Usage:
  * ```typescript
  * import { cacheService } from './services/cache.service';
- * 
+ *
  * // Set cache
  * cacheService.set('user:123', userData, 600); // 10 minutes
- * 
+ *
  * // Get cache
  * const user = cacheService.get('user:123');
  * ```
@@ -29,7 +29,7 @@ class CacheService {
 
   constructor() {
     this.enabled = process.env.ENABLE_CACHE !== 'false';
-    
+
     if (!this.enabled) {
       logger.warn('[Cache] Caching is disabled');
     }

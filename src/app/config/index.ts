@@ -1,2 +1,2 @@
-export * from "./corsConfig";
-export * from "./passport-config";
+export * from './corsConfig';
+export * from './passport-config';

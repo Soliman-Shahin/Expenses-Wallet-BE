@@ -1,9 +1,9 @@
 /**
  * Standardized Error Codes
- * 
+ *
  * Provides consistent error codes across the application for better debugging
  * and client-side error handling.
- * 
+ *
  * Format: CATEGORY_DESCRIPTION
  * Categories: AUTH, VALIDATION, RESOURCE, DATABASE, EXTERNAL, ENCRYPTION, FILE, BUSINESS
  */
@@ -24,7 +24,7 @@ export enum ErrorCode {
   // ==================== Resource Errors (RESOURCE_xxx) ====================
   RESOURCE_NOT_FOUND = 'NOT_FOUND',
   RESOURCE_CONFLICT = 'CONFLICT',
-  RESOURCE_DUPLICATE = 'DUPLICATE_KEY',
+  RESOURCE_DUPLICATE = 'RESOURCE_DUPLICATE',
 
   // ==================== Validation Errors (VALIDATION_xxx) ====================
   VALIDATION_FAILED = 'VALIDATION_ERROR',
@@ -33,7 +33,7 @@ export enum ErrorCode {
 
   // ==================== Database Errors (DB_xxx) ====================
   DB_ERROR = 'DATABASE_ERROR',
-  DB_DUPLICATE_KEY = 'DUPLICATE_KEY',
+  DB_DUPLICATE_KEY = 'DB_DUPLICATE_KEY',
 
   // ==================== External Service Errors (EXTERNAL_xxx) ====================
   EXTERNAL_SERVICE_ERROR = 'EXTERNAL_SERVICE_ERROR',
@@ -109,11 +109,14 @@ export const ErrorCodeStatusMap: Record<ErrorCode, number> = {
 export const ErrorCodeMessageMap: Record<ErrorCode, string> = {
   [ErrorCode.AUTH_FAILED]: 'Authentication failed. Please log in again.',
   [ErrorCode.AUTH_INVALID_CREDENTIALS]: 'Invalid email or password.',
-  [ErrorCode.AUTH_TOKEN_EXPIRED]: 'Your session has expired. Please log in again.',
+  [ErrorCode.AUTH_TOKEN_EXPIRED]:
+    'Your session has expired. Please log in again.',
   [ErrorCode.AUTH_INVALID_TOKEN]: 'Invalid authentication token.',
-  [ErrorCode.AUTH_ACCOUNT_LOCKED]: 'Account locked due to too many failed attempts.',
+  [ErrorCode.AUTH_ACCOUNT_LOCKED]:
+    'Account locked due to too many failed attempts.',
 
-  [ErrorCode.AUTHZ_FAILED]: 'You do not have permission to perform this action.',
+  [ErrorCode.AUTHZ_FAILED]:
+    'You do not have permission to perform this action.',
   [ErrorCode.AUTHZ_FORBIDDEN]: 'Access forbidden.',
   [ErrorCode.AUTHZ_INSUFFICIENT_PERMISSIONS]: 'Insufficient permissions.',
 
@@ -128,10 +131,12 @@ export const ErrorCodeMessageMap: Record<ErrorCode, string> = {
   [ErrorCode.DB_ERROR]: 'Database operation failed. Please try again.',
   [ErrorCode.DB_DUPLICATE_KEY]: 'Duplicate entry found.',
 
-  [ErrorCode.EXTERNAL_SERVICE_ERROR]: 'External service error. Please try again later.',
+  [ErrorCode.EXTERNAL_SERVICE_ERROR]:
+    'External service error. Please try again later.',
 
   [ErrorCode.CRYPTO_ENCRYPTION_FAILED]: 'Encryption failed.',
-  [ErrorCode.CRYPTO_DECRYPTION_FAILED]: 'Decryption failed. Invalid data or key.',
+  [ErrorCode.CRYPTO_DECRYPTION_FAILED]:
+    'Decryption failed. Invalid data or key.',
 
   [ErrorCode.FILE_UPLOAD_ERROR]: 'File upload failed.',
   [ErrorCode.FILE_TOO_LARGE]: 'File size exceeds maximum allowed size.',

@@ -1,13 +1,14 @@
-import { Response } from "express";
-import { sendError, sendSuccess } from "../shared/helper";
-import { CustomRequest } from "../types/custom-request";
-import { ExpenseService } from "../services/expense.service";
+import logger from '../services/logger.service';
+import { Response } from 'express';
+import { sendError, sendSuccess } from '../shared/helper';
+import { CustomRequest } from '../types/custom-request';
+import { ExpenseService } from '../services/expense.service';
 
 export const createExpense = async (req: CustomRequest, res: Response) => {
   try {
-    const user = req.user_id || "";
+    const user = req.user_id || '';
     const expense = await ExpenseService.createExpense(req.body, user);
-    sendSuccess(res, expense, "Expense created successfully");
+    sendSuccess(res, expense, 'Expense created successfully');
   } catch (error: any) {
     sendError(res, error.message);
   }
@@ -15,12 +16,20 @@ export const createExpense = async (req: CustomRequest, res: Response) => {
 
 export const getExpenses = async (req: CustomRequest, res: Response) => {
   try {
-    const user = req.user_id || "";
-    const { search, category, categories, type, startDate, endDate, limit, skip } =
-      req.query;
+    const user = req.user_id || '';
+    const {
+      search,
+      category,
+      categories,
+      type,
+      startDate,
+      endDate,
+      limit,
+      skip,
+    } = req.query;
 
-    let finalStartDate = startDate as string;
-    let finalEndDate = endDate as string;
+    const finalStartDate = startDate as string;
+    const finalEndDate = endDate as string;
 
     // No longer defaulting to current month here to allow fetching all transactions
     // The frontend should specify the dates if it wants them filtered.
@@ -29,7 +38,7 @@ export const getExpenses = async (req: CustomRequest, res: Response) => {
       search: search as string,
       category: category as string,
       categories: categories as string,
-      type: type as "income" | "outcome",
+      type: type as 'income' | 'outcome',
       startDate: finalStartDate,
       endDate: finalEndDate,
       limit: limit ? parseInt(limit as string) : undefined,
@@ -47,18 +56,18 @@ export const getExpenses = async (req: CustomRequest, res: Response) => {
       sendSuccess(res, expenses.data || expenses);
     }
   } catch (error: any) {
-    console.error("❌ Error in getExpenses:", error);
+    logger.error('❌ Error in getExpenses:', error);
     sendError(res, error.message);
   }
 };
 
 export const getExpenseById = async (req: CustomRequest, res: Response) => {
   try {
-    const id = req.params.id || "";
-    const user = req.user_id || "";
+    const id = (req.params.id as string) || '';
+    const user = req.user_id || '';
     const expense = await ExpenseService.getExpenseById(id, user);
     if (!expense) {
-      return sendError(res, "Expense not found", 404);
+      return sendError(res, 'Expense not found', 404);
     }
     sendSuccess(res, expense);
   } catch (error: any) {
@@ -68,17 +77,17 @@ export const getExpenseById = async (req: CustomRequest, res: Response) => {
 
 export const updateExpense = async (req: CustomRequest, res: Response) => {
   try {
-    const id = req.params.id || "";
-    const user = req.user_id || "";
+    const id = (req.params.id as string) || '';
+    const user = req.user_id || '';
     const updatedExpense = await ExpenseService.updateExpense(
       id,
       req.body,
       user
     );
     if (!updatedExpense) {
-      return sendError(res, "Expense not found", 404);
+      return sendError(res, 'Expense not found', 404);
     }
-    sendSuccess(res, updatedExpense, "Expense updated successfully");
+    sendSuccess(res, updatedExpense, 'Expense updated successfully');
   } catch (error: any) {
     sendError(res, error.message);
   }
@@ -86,13 +95,13 @@ export const updateExpense = async (req: CustomRequest, res: Response) => {
 
 export const deleteExpense = async (req: CustomRequest, res: Response) => {
   try {
-    const id = req.params.id || "";
-    const user = req.user_id || "";
+    const id = (req.params.id as string) || '';
+    const user = req.user_id || '';
     const deletedExpense = await ExpenseService.deleteExpense(id, user);
     if (!deletedExpense) {
-      return sendError(res, "Expense not found", 404);
+      return sendError(res, 'Expense not found', 404);
     }
-    sendSuccess(res, {}, "Expense deleted successfully");
+    sendSuccess(res, {}, 'Expense deleted successfully');
   } catch (error: any) {
     sendError(res, error.message);
   }
@@ -100,10 +109,10 @@ export const deleteExpense = async (req: CustomRequest, res: Response) => {
 
 export const getExpenseTotals = async (req: CustomRequest, res: Response) => {
   try {
-    const user = req.user_id || "";
+    const user = req.user_id || '';
     const { startDate, endDate } = req.query;
     if (!startDate || !endDate) {
-      return sendError(res, "Start date and end date are required", 400);
+      return sendError(res, 'Start date and end date are required', 400);
     }
     const result = await ExpenseService.getExpenseTotals(
       user,

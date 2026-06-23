@@ -1,16 +1,16 @@
-import { Schema, model, Document } from "mongoose";
-import { Expense } from "./expense.model";
+import { Schema, model, Document, Types } from 'mongoose';
+import { Expense } from './expense.model';
 
 export interface ICategory extends Document {
   title: string;
   icon: string;
   color: string;
-  type: "income" | "outcome";
+  type: 'income' | 'outcome';
   order: number;
-  user: Schema.Types.ObjectId;
+  user: Types.ObjectId;
   isDefault: boolean;
   // Sync fields
-  _syncStatus?: "synced" | "pending" | "conflict" | "error" | "offline";
+  _syncStatus?: 'synced' | 'pending' | 'conflict' | 'error' | 'offline';
   _lastModified?: Date;
   _version?: number;
   _isDeleted?: boolean;
@@ -28,17 +28,17 @@ const categorySchema = new Schema(
     color: { type: String, required: true },
     type: {
       type: String,
-      enum: ["income", "outcome"],
-      default: "outcome",
+      enum: ['income', 'outcome'],
+      default: 'outcome',
     },
     order: { type: Number, default: 0 },
-    user: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     isDefault: { type: Boolean, default: false },
     // Sync fields
     _syncStatus: {
       type: String,
-      enum: ["synced", "pending", "conflict", "error", "offline"],
-      default: "synced",
+      enum: ['synced', 'pending', 'conflict', 'error', 'offline'],
+      default: 'synced',
     },
     _lastModified: { type: Date, default: Date.now },
     _version: { type: Number, default: 1 },
@@ -51,12 +51,12 @@ const categorySchema = new Schema(
 
 // Create the Category model using generics
 categorySchema.pre(
-  "deleteOne",
+  'deleteOne',
   { document: true, query: false },
-  async function (next) {
+  async function () {
     try {
       // Find the default category for the user
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+
       // @ts-ignore
       const defaultCategory = await this.constructor.findOne({
         user: this.user,
@@ -76,9 +76,8 @@ categorySchema.pre(
           { $set: { category: null } }
         );
       }
-      next();
     } catch (error: any) {
-      next(error);
+      throw error;
     }
   }
 );
@@ -92,5 +91,5 @@ categorySchema.index({ user: 1, type: 1 });
 // Index for ordering categories
 categorySchema.index({ user: 1, order: 1 });
 
-const Category = model<ICategory>("Category", categorySchema);
+const Category = model<ICategory>('Category', categorySchema);
 export { Category };

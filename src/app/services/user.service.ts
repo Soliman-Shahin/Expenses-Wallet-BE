@@ -1,22 +1,22 @@
-import { User, UserDocument } from "../models/user.model";
-import bcrypt from "bcryptjs";
-import crypto from "crypto";
-import jwt from "jsonwebtoken";
-import { config } from "dotenv";
+import { User, UserDocument } from '../models/user.model';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import { config } from 'dotenv';
 config();
 
 const ACCESS_TOKEN_SECRET =
-  process.env.ACCESS_TOKEN_SECRET || "default_access_secret";
+  process.env.ACCESS_TOKEN_SECRET || 'default_access_secret';
 const REFRESH_TOKEN_SECRET =
-  process.env.REFRESH_TOKEN_SECRET || "default_refresh_secret";
+  process.env.REFRESH_TOKEN_SECRET || 'default_refresh_secret';
 const REFRESH_TOKEN_EXPIRY_DAYS = parseInt(
-  process.env.REFRESH_TOKEN_EXPIRY_DAYS || "10",
+  process.env.REFRESH_TOKEN_EXPIRY_DAYS || '10',
   10
 );
 
 // Hash a refresh token before storing in DB
 function hashToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 export class UserService {
@@ -36,23 +36,23 @@ export class UserService {
     password: string
   ): Promise<UserDocument> {
     const user = await User.findOne({ email });
-    if (!user) throw new Error("User not found");
+    if (!user) throw new Error('User not found');
     const isPasswordMatch = await bcrypt.compare(password, user.password);
-    if (!isPasswordMatch) throw new Error("Invalid Password");
+    if (!isPasswordMatch) throw new Error('Invalid Password');
     return user;
   }
 
   // Generate access token
   static async generateAccessToken(user: UserDocument): Promise<string> {
     return jwt.sign({ _id: user._id }, ACCESS_TOKEN_SECRET, {
-      expiresIn: "1h",
-      algorithm: "HS256",
+      expiresIn: '1h',
+      algorithm: 'HS256',
     });
   }
 
   // Generate a secure refresh token
   static async generateRefreshToken(): Promise<string> {
-    return crypto.randomBytes(64).toString("hex");
+    return crypto.randomBytes(64).toString('hex');
   }
 
   // Add a refresh token (hashed) to the user, remove expired/used tokens
@@ -85,7 +85,7 @@ export class UserService {
     refreshToken: string
   ): Promise<UserDocument | null> {
     const hashed = hashToken(refreshToken);
-    return User.findOne({ "sessions.token": hashed });
+    return User.findOne({ 'sessions.token': hashed });
   }
 
   // Remove all refresh tokens (on password change, etc)

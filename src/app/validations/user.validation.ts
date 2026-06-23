@@ -1,11 +1,11 @@
-import Joi from "joi";
+import { z } from 'zod';
 
-export const signUpSchema = Joi.object({
-  email: Joi.string().email().required(),
-  password: Joi.string().min(6).required(),
+export const signUpSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
 });
 
-export const loginSchema = Joi.object({
-  email: Joi.string().email().required(),
-  password: Joi.string().required(),
+export const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string(),
 });

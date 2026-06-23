@@ -1,15 +1,15 @@
-import { Request, Response, NextFunction } from "express";
-import { sendError } from "../shared/helper";
-import logger from "../utils/logger";
+import { Request, Response, NextFunction } from 'express';
+import { sendError } from '../shared/helper';
+import logger from '../utils/logger';
 
 /**
  * Redis-based Rate Limiting Middleware (Optional Enhancement)
- * 
+ *
  * To use Redis rate limiting:
  * 1. Install: npm install ioredis
  * 2. Set REDIS_URL in .env
  * 3. Import and use this middleware instead of rate-limit.middleware.ts
- * 
+ *
  * Benefits:
  * - Supports horizontal scaling (multiple server instances)
  * - Persistent rate limit data across restarts
@@ -31,15 +31,17 @@ export function createRedisRateLimiter(config: RateLimitConfig) {
   const {
     windowMs,
     maxRequests,
-    message = "Too many requests, please try again later",
+    message = 'Too many requests, please try again later',
     statusCode = 429,
   } = config;
 
   // Check if Redis is available
   const redisUrl = process.env.REDIS_URL;
-  
+
   if (!redisUrl) {
-    logger.warn('[Rate Limiter] REDIS_URL not configured, using memory-based rate limiting');
+    logger.warn(
+      '[Rate Limiter] REDIS_URL not configured, using memory-based rate limiting'
+    );
     // Fallback to memory-based rate limiting
     return createMemoryRateLimiter(config);
   }
@@ -80,7 +82,9 @@ export function createRedisRateLimiter(config: RateLimitConfig) {
   */
 
   // For now, fallback to memory-based
-  logger.info('[Rate Limiter] Redis support not yet implemented, using memory-based rate limiting');
+  logger.info(
+    '[Rate Limiter] Redis support not yet implemented, using memory-based rate limiting'
+  );
   return createMemoryRateLimiter(config);
 }
 
@@ -89,7 +93,12 @@ export function createRedisRateLimiter(config: RateLimitConfig) {
  */
 function createMemoryRateLimiter(config: RateLimitConfig) {
   const store: { [key: string]: { count: number; resetTime: number } } = {};
-  const { windowMs, maxRequests, message = "Too many requests", statusCode = 429 } = config;
+  const {
+    windowMs,
+    maxRequests,
+    message = 'Too many requests',
+    statusCode = 429,
+  } = config;
 
   // Cleanup old entries every minute
   setInterval(() => {
@@ -118,7 +127,10 @@ function createMemoryRateLimiter(config: RateLimitConfig) {
 
     res.setHeader('X-RateLimit-Limit', maxRequests.toString());
     res.setHeader('X-RateLimit-Remaining', remaining.toString());
-    res.setHeader('X-RateLimit-Reset', new Date(store[key].resetTime).toISOString());
+    res.setHeader(
+      'X-RateLimit-Reset',
+      new Date(store[key].resetTime).toISOString()
+    );
 
     if (store[key].count > maxRequests) {
       return sendError(res, message, statusCode, 'RATE_LIMIT_EXCEEDED');
@@ -137,5 +149,5 @@ export const apiRateLimiter = createRedisRateLimiter({
 export const authRateLimiter = createRedisRateLimiter({
   windowMs: 15 * 60 * 1000,
   maxRequests: 5,
-  message: "Too many authentication attempts, please try again later",
+  message: 'Too many authentication attempts, please try again later',
 });

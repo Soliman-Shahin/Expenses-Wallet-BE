@@ -1,5 +1,6 @@
-import crypto from "crypto";
-import CryptoJS from "crypto-js";
+import logger from '../services/logger.service';
+import crypto from 'crypto';
+import CryptoJS from 'crypto-js';
 
 /**
  * CryptoJS-Compatible Encryption/Decryption
@@ -11,18 +12,22 @@ import CryptoJS from "crypto-js";
  */
 function getEncryptionKey(): string {
   const key = process.env.ENCRYPTION_KEY;
-  
+
   if (!key) {
-    console.warn(
-      "⚠️  ENCRYPTION_KEY not set. Using TEMP_TRANSPORT_KEY (matches Frontend)"
+    logger.warn(
+      '⚠️  ENCRYPTION_KEY not set. Using TEMP_TRANSPORT_KEY (matches Frontend)'
     );
-    return "TEMP_TRANSPORT_KEY";
+    return 'TEMP_TRANSPORT_KEY';
   }
-  
-  console.log("🔑 [CryptoJS] Using ENCRYPTION_KEY from env (length:", key.length, ")");
+
+  logger.info(
+    '🔑 [CryptoJS] Using ENCRYPTION_KEY from env (length:',
+    key.length,
+    ')'
+  );
   // Frontend uses TEMP_TRANSPORT_KEY, so we should too if ENCRYPTION_KEY is set to something else
   // For now, always use TEMP_TRANSPORT_KEY to match Frontend
-  return "TEMP_TRANSPORT_KEY";
+  return 'TEMP_TRANSPORT_KEY';
 }
 
 const ENCRYPTION_KEY = getEncryptionKey();
@@ -33,8 +38,8 @@ const ENCRYPTION_KEY = getEncryptionKey();
  * @returns Encrypted string in CryptoJS format
  */
 export function encryptCryptoJS(data: any): string {
-  if (!data) return "";
-  
+  if (!data) return '';
+
   try {
     const encrypted = CryptoJS.AES.encrypt(
       JSON.stringify(data),
@@ -42,8 +47,8 @@ export function encryptCryptoJS(data: any): string {
     );
     return encrypted.toString();
   } catch (error) {
-    console.error("❌ CryptoJS encryption failed:", error);
-    throw new Error("Encryption failed");
+    logger.error('❌ CryptoJS encryption failed:', error);
+    throw new Error('Encryption failed');
   }
 }
 
@@ -54,24 +59,27 @@ export function encryptCryptoJS(data: any): string {
  */
 export function decryptCryptoJS(encryptedData: string): any {
   if (!encryptedData) return null;
-  
+
   try {
-    console.log("🔑 [CryptoJS] Decrypting with key:", ENCRYPTION_KEY);
-    console.log("🔍 [CryptoJS] Encrypted data length:", encryptedData.length);
-    
+    logger.info('🔑 [CryptoJS] Decrypting with key:', ENCRYPTION_KEY);
+    logger.info('🔍 [CryptoJS] Encrypted data length:', encryptedData.length);
+
     const bytes = CryptoJS.AES.decrypt(encryptedData, ENCRYPTION_KEY);
     const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
-    
-    console.log("🔍 [CryptoJS] Decrypted string length:", decryptedData.length);
-    console.log("🔍 [CryptoJS] Decrypted preview:", decryptedData.substring(0, 50));
-    
+
+    logger.info('🔍 [CryptoJS] Decrypted string length:', decryptedData.length);
+    logger.info(
+      '🔍 [CryptoJS] Decrypted preview:',
+      decryptedData.substring(0, 50)
+    );
+
     if (!decryptedData) {
-      throw new Error("Decryption returned empty string - wrong key?");
+      throw new Error('Decryption returned empty string - wrong key?');
     }
-    
+
     return JSON.parse(decryptedData);
   } catch (error) {
-    console.error("❌ CryptoJS decryption failed:", error);
+    logger.error('❌ CryptoJS decryption failed:', error);
     throw error;
   }
 }
@@ -81,5 +89,5 @@ export function decryptCryptoJS(encryptedData: string): any {
  */
 export function isCryptoJSFormat(data: string): boolean {
   // CryptoJS format starts with "U2FsdGVkX1" (base64 of "Salted__")
-  return typeof data === "string" && data.startsWith("U2FsdGVkX1");
+  return typeof data === 'string' && data.startsWith('U2FsdGVkX1');
 }

@@ -1,32 +1,33 @@
-import { Response } from "express";
-import { sendError, sendSuccess } from "../shared/helper";
-import { CustomRequest } from "../types/custom-request";
-import { UserService } from "../services/user.service";
-import { User, Category } from "../models";
-import bcrypt from "bcryptjs";
-import { validatePassword } from "../services/password-validation.service";
+import { Response } from 'express';
+import { sendError, sendSuccess } from '../shared/helper';
+import { CustomRequest } from '../types/custom-request';
+import { UserService } from '../services/user.service';
+import { User, Category } from '../models';
+import bcrypt from 'bcryptjs';
+import { validatePassword } from '../services/password-validation.service';
 import {
   recordFailedLogin,
   resetLoginAttempts,
-} from "../middleware/brute-force.middleware";
+} from '../middleware/brute-force.middleware';
 import {
   ConflictError,
   InvalidCredentialsError,
   ValidationError,
-} from "../shared/errors";
-import logger from "../services/logger.service";
+} from '../shared/errors';
+import logger from '../services/logger.service';
 import {
   UserCredentials,
   UserUpdatePayload,
   UserResponse,
   UploadedFile,
   ErrorWithContext,
-} from "../types/user-types";
+} from '../types/user-types';
 
 // Use higher salt rounds in production for better security
-const SALT_ROUNDS = process.env.NODE_ENV === 'production' 
-  ? 12 
-  : Number(process.env.SALT_ROUNDS) || 10;
+const SALT_ROUNDS =
+  process.env.NODE_ENV === 'production'
+    ? 12
+    : Number(process.env.SALT_ROUNDS) || 10;
 
 // POST /signup
 const signUp = async (req: CustomRequest, res: Response) => {
@@ -36,7 +37,7 @@ const signUp = async (req: CustomRequest, res: Response) => {
     // Validate password strength
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.isValid) {
-      throw new ValidationError("Password validation failed", {
+      throw new ValidationError('Password validation failed', {
         errors: passwordValidation.errors,
         suggestions: passwordValidation.suggestions,
         strength: passwordValidation.strength,
@@ -51,7 +52,7 @@ const signUp = async (req: CustomRequest, res: Response) => {
     ).catch(() => null);
 
     if (existingUser) {
-      throw new ConflictError("Email already used");
+      throw new ConflictError('Email already used');
     }
 
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
@@ -60,14 +61,14 @@ const signUp = async (req: CustomRequest, res: Response) => {
     const user = await UserService.createUser(email, hashedPassword);
 
     // Log user creation
-    logger.info("New user registered", { userId: user._id.toString(), email });
+    logger.info('New user registered', { userId: user._id.toString(), email });
 
     // Create a default category for the new user
     await Category.create({
-      title: "Uncategorized",
-      icon: "help-circle-outline",
-      color: "#9E9E9E",
-      type: "outcome",
+      title: 'Uncategorized',
+      icon: 'help-circle-outline',
+      color: '#9E9E9E',
+      type: 'outcome',
       user: user._id,
       isDefault: true,
     });
@@ -78,10 +79,10 @@ const signUp = async (req: CustomRequest, res: Response) => {
     await UserService.addRefreshToken(user, refreshToken);
 
     // Also return tokens in headers for legacy frontend compatibility
-    res.setHeader("access-token", accessToken);
-    res.setHeader("refresh-token", refreshToken);
+    res.setHeader('access-token', accessToken);
+    res.setHeader('refresh-token', refreshToken);
 
-    sendSuccess(res, { user, accessToken, refreshToken }, "Signup successful");
+    sendSuccess(res, { user, accessToken, refreshToken }, 'Signup successful');
   } catch (error: unknown) {
     const context = {
       ip: req.ip || req.socket.remoteAddress,
@@ -89,14 +90,19 @@ const signUp = async (req: CustomRequest, res: Response) => {
       path: req.path,
     };
     const err = error as ErrorWithContext;
-    logger.error("Signup failed", err, context);
-    sendError(res, err.message || 'Signup failed', err.statusCode || 500, (err as any).code);
+    logger.error('Signup failed', err, context);
+    sendError(
+      res,
+      err.message || 'Signup failed',
+      err.statusCode || 500,
+      (err as any).code
+    );
   }
 };
 
 // POST /users/login
 const login = async (req: CustomRequest, res: Response) => {
-  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
 
   try {
     const { email, password } = req.body as UserCredentials;
@@ -108,7 +114,7 @@ const login = async (req: CustomRequest, res: Response) => {
     resetLoginAttempts(email, ip);
 
     // Log successful login
-    logger.info("User logged in", {
+    logger.info('User logged in', {
       userId: user._id.toString(),
       email,
       ip,
@@ -119,10 +125,10 @@ const login = async (req: CustomRequest, res: Response) => {
     await UserService.addRefreshToken(user, refreshToken);
 
     // Also return tokens in headers for legacy frontend compatibility
-    res.setHeader("access-token", accessToken);
-    res.setHeader("refresh-token", refreshToken);
+    res.setHeader('access-token', accessToken);
+    res.setHeader('refresh-token', refreshToken);
 
-    sendSuccess(res, { user, accessToken, refreshToken }, "Login successful");
+    sendSuccess(res, { user, accessToken, refreshToken }, 'Login successful');
   } catch (error: unknown) {
     // Record failed login attempt
     const email = req.body?.email;
@@ -136,13 +142,18 @@ const login = async (req: CustomRequest, res: Response) => {
       path: req.path,
     };
     const err = error as Error;
-    logger.warn("Login failed", context, {
+    logger.warn('Login failed', context, {
       email,
       reason: err.message || 'Unknown error',
     });
 
     // Send error response instead of throwing
-    return sendError(res, "Invalid email or password", 401, "INVALID_CREDENTIALS");
+    return sendError(
+      res,
+      'Invalid email or password',
+      401,
+      'INVALID_CREDENTIALS'
+    );
   }
 };
 
@@ -150,12 +161,12 @@ const login = async (req: CustomRequest, res: Response) => {
 const userAccessToken = async (req: CustomRequest, res: Response) => {
   try {
     if (!req.userObject) {
-      return sendError(res, "User not found in request", 401);
+      return sendError(res, 'User not found in request', 401);
     }
     const accessToken = await UserService.generateAccessToken(req.userObject);
     // Mirror in header for clients that read headers
-    res.setHeader("access-token", accessToken);
-    sendSuccess(res, { accessToken }, "Access token generated successfully");
+    res.setHeader('access-token', accessToken);
+    sendSuccess(res, { accessToken }, 'Access token generated successfully');
   } catch (error: unknown) {
     const err = error as Error;
     sendError(res, err.message || 'An error occurred');
@@ -167,26 +178,26 @@ const refreshToken = async (req: CustomRequest, res: Response) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) {
-      return sendError(res, "Refresh token required", 400);
+      return sendError(res, 'Refresh token required', 400);
     }
     // Find user by hashed refresh token
     const user = await UserService.findByRefreshToken(refreshToken);
     if (!user) {
-      return sendError(res, "Invalid refresh token", 401);
+      return sendError(res, 'Invalid refresh token', 401);
     }
     // Find the session
-    const hashed = require("crypto")
-      .createHash("sha256")
+    const hashed = require('crypto')
+      .createHash('sha256')
       .update(refreshToken)
-      .digest("hex");
+      .digest('hex');
     const session = user.sessions.find((s) => s.token === hashed);
     if (!session) {
-      return sendError(res, "Session not found", 401);
+      return sendError(res, 'Session not found', 401);
     }
     // Check if expired
     if (session.expiresAt < Date.now() / 1000) {
       await UserService.removeRefreshToken(user, refreshToken);
-      return sendError(res, "Refresh token expired", 401);
+      return sendError(res, 'Refresh token expired', 401);
     }
     // Rotate refresh token: remove old, add new
     await UserService.removeRefreshToken(user, refreshToken);
@@ -195,12 +206,12 @@ const refreshToken = async (req: CustomRequest, res: Response) => {
     // Generate new access token
     const accessToken = await UserService.generateAccessToken(user);
     // Expose in headers as well
-    res.setHeader("access-token", accessToken);
-    res.setHeader("refresh-token", newRefreshToken);
+    res.setHeader('access-token', accessToken);
+    res.setHeader('refresh-token', newRefreshToken);
     sendSuccess(
       res,
       { accessToken, refreshToken: newRefreshToken },
-      "Token refreshed successfully"
+      'Token refreshed successfully'
     );
   } catch (error: unknown) {
     const err = error as Error;
@@ -217,15 +228,15 @@ const getMe = async (
 ) => {
   try {
     const userId = req.user_id;
-    if (!userId) return sendError(res, "Unauthorized", 401);
+    if (!userId) return sendError(res, 'Unauthorized', 401);
     const user = await User.findById(userId);
-    if (!user) return sendError(res, "User not found", 404);
+    if (!user) return sendError(res, 'User not found', 404);
     // Normalize salary in response to array shape for legacy documents
-    const obj = user.toJSON() as UserResponse;
-    if (typeof obj.salary === "number") {
-      obj.salary = [{ label: "Salary", amount: obj.salary }];
+    const obj = user.toJSON() as unknown as UserResponse;
+    if (typeof obj.salary === 'number') {
+      obj.salary = [{ label: 'Salary', amount: obj.salary }];
     }
-    return sendSuccess(res, obj, "User fetched successfully");
+    return sendSuccess(res, obj, 'User fetched successfully');
   } catch (error: unknown) {
     const err = error as Error;
     return sendError(res, err.message || 'Failed to fetch user');
@@ -239,7 +250,7 @@ const updateMe = async (
 ) => {
   try {
     const userId = req.user_id;
-    if (!userId) return sendError(res, "Unauthorized", 401);
+    if (!userId) return sendError(res, 'Unauthorized', 401);
 
     // Explicitly remove email from the update payload to prevent changes
     if ((req.body as any).email) {
@@ -253,19 +264,21 @@ const updateMe = async (
 
     const allowed: Array<keyof typeof req.body> = [
       // We deliberately omit 'fullName' from persistence to standardize on 'username'
-      "phone",
-      "salary",
-      "currency",
-      "username",
-      "image",
+      'phone',
+      'salary',
+      'currency',
+      'username',
+      'image',
     ];
 
     const updatePayload: Partial<UserUpdatePayload> = {};
     // Coerce numeric salary into array shape if provided
     if (req.body && req.body.salary !== undefined) {
-      const incoming = req.body.salary as number | Array<{ label: string; amount: number }>;
-      if (typeof incoming === "number") {
-        (req.body as any).salary = [{ label: "Salary", amount: incoming }];
+      const incoming = req.body.salary as
+        | number
+        | Array<{ label: string; amount: number }>;
+      if (typeof incoming === 'number') {
+        (req.body as any).salary = [{ label: 'Salary', amount: incoming }];
       }
     }
     for (const key of allowed) {
@@ -279,8 +292,8 @@ const updateMe = async (
       runValidators: true,
     });
 
-    if (!updated) return sendError(res, "User not found", 404);
-    return sendSuccess(res, updated, "User updated successfully");
+    if (!updated) return sendError(res, 'User not found', 404);
+    return sendSuccess(res, updated, 'User updated successfully');
   } catch (error: unknown) {
     const err = error as Error;
     return sendError(res, err.message || 'Failed to update user');
@@ -291,24 +304,24 @@ export { getMe, updateMe };
 
 // POST /user/me/avatar
 const uploadAvatar = async (
-  req: CustomRequest & { user_id?: string; file?: UploadedFile; files?: UploadedFile[] },
+  req: CustomRequest & {
+    user_id?: string;
+    file?: UploadedFile;
+    files?: UploadedFile[];
+  },
   res: Response
 ) => {
   try {
     const userId = req.user_id;
-    if (!userId) return sendError(res, "Unauthorized", 401);
+    if (!userId) return sendError(res, 'Unauthorized', 401);
     let file: UploadedFile | undefined = req.file;
-    if (
-      !file &&
-      Array.isArray(req.files) &&
-      (req as any).files.length > 0
-    ) {
+    if (!file && Array.isArray(req.files) && (req as any).files.length > 0) {
       file = (req as any).files[0];
     }
-    if (!file) return sendError(res, "No file uploaded", 400);
+    if (!file) return sendError(res, 'No file uploaded', 400);
 
     // Convert to Data URL for quick dev. In production, store to object storage or disk.
-    const base64 = file.buffer.toString("base64");
+    const base64 = file.buffer.toString('base64');
     const dataUrl = `data:${file.mimetype};base64,${base64}`;
 
     const updated = await User.findByIdAndUpdate(
@@ -316,13 +329,13 @@ const uploadAvatar = async (
       { image: dataUrl },
       { new: true }
     );
-    if (!updated) return sendError(res, "User not found", 404);
+    if (!updated) return sendError(res, 'User not found', 404);
 
     // Return in a shape the frontend can understand
     return sendSuccess(
       res,
       { avatarUrl: updated.image, user: updated },
-      "Avatar updated"
+      'Avatar updated'
     );
   } catch (error: unknown) {
     const err = error as Error;

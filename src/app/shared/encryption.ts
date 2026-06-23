@@ -1,14 +1,15 @@
-import CryptoJS from "crypto-js";
+import logger from '../services/logger.service';
+import CryptoJS from 'crypto-js';
 
-const KEY = process.env.ENCRYPTION_KEY || "ExpensesWalletSecretKey2024";
+const KEY = process.env.ENCRYPTION_KEY || 'ExpensesWalletSecretKey2024';
 
 export const encrypt = (data: any): string => {
-  if (!data) return "";
+  if (!data) return '';
   try {
     return CryptoJS.AES.encrypt(JSON.stringify(data), KEY).toString();
   } catch (e) {
-    console.error("Encryption failed", e);
-    return "";
+    logger.error('Encryption failed', e);
+    return '';
   }
 };
 
@@ -19,7 +20,7 @@ export const decrypt = (ciphertext: string): any => {
     const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
     return JSON.parse(decryptedData);
   } catch (e) {
-    console.error("Decryption failed", e);
+    logger.error('Decryption failed', e);
     return null;
   }
 };

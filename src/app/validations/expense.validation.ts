@@ -1,8 +1,8 @@
-import Joi from "joi";
+import { z } from 'zod';
 
-export const expenseSchema = Joi.object({
-  description: Joi.string().required(),
-  amount: Joi.number().positive().required(),
-  category: Joi.string().required(), // Assuming category is an ID
-  date: Joi.date().required(),
+export const expenseSchema = z.object({
+  description: z.string(),
+  amount: z.number().positive(),
+  category: z.string(), // Assuming category is an ID
+  date: z.coerce.date(),
 });

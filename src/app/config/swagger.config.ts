@@ -2,7 +2,7 @@ import swaggerJsdoc from 'swagger-jsdoc';
 
 /**
  * Swagger/OpenAPI Configuration
- * 
+ *
  * Provides interactive API documentation at /api-docs
  */
 
@@ -11,7 +11,8 @@ const swaggerDefinition = {
   info: {
     title: 'Expenses Wallet API',
     version: '2.0.0',
-    description: 'Secure backend API for Expenses Wallet with advanced encryption and monitoring',
+    description:
+      'Secure backend API for Expenses Wallet with advanced encryption and monitoring',
     contact: {
       name: 'Soliman Shahin',
       email: 'support@expenses-wallet.com',
@@ -114,7 +115,7 @@ const swaggerDefinition = {
           },
           amount: {
             type: 'number',
-            example: 150.50,
+            example: 150.5,
           },
           category: {
             type: 'string',
@@ -202,10 +203,7 @@ const swaggerDefinition = {
 const options: swaggerJsdoc.Options = {
   swaggerDefinition,
   // Path to API docs (JSDoc comments in route files)
-  apis: [
-    './src/app/routes/*.ts',
-    './src/app/controllers/*.ts',
-  ],
+  apis: ['./src/app/routes/*.ts', './src/app/controllers/*.ts'],
 };
 
 export const swaggerSpec = swaggerJsdoc(options);

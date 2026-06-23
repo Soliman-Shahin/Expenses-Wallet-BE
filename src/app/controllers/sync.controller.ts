@@ -1,5 +1,11 @@
+import logger from '../services/logger.service';
 import { Request, Response, NextFunction } from 'express';
-import { SyncService, SyncRequest, SyncResponse, ConflictResolutionRequest } from '../services/sync.service';
+import {
+  SyncService,
+  SyncRequest,
+  SyncResponse,
+  ConflictResolutionRequest,
+} from '../services/sync.service';
 import { sendError, sendSuccess } from '../shared/helper';
 
 export class SyncController {
@@ -11,62 +17,73 @@ export class SyncController {
 
   // ==================== SYNC DATA PULL ====================
 
-  async pullData(req: Request, res: Response, next: NextFunction): Promise<void> {
-
+  async pullData(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
-      console.log('Pull data controller called');
+      logger.info('Pull data controller called');
       const userId = (req as any).user?._id || (req as any).user_id;
-      console.log('User ID:', userId);
-      
+      logger.info('User ID:', userId);
+
       if (!userId) {
-        console.error('No userId found');
+        logger.error('No userId found');
         sendError(res, 'User ID is required', 400, 'SYNC_USER_ID_REQUIRED');
         return;
       }
-      
+
       const { lastSyncTime, entityType, limit, offset } = req.query;
-      
+
       const request: SyncRequest = {
-        lastSyncTime: lastSyncTime ? new Date(lastSyncTime as string) : undefined,
+        lastSyncTime: lastSyncTime
+          ? new Date(lastSyncTime as string)
+          : undefined,
         entityType: entityType as 'expense' | 'category' | 'user',
         limit: limit ? parseInt(limit as string) : 50,
-        offset: offset ? parseInt(offset as string) : 0
+        offset: offset ? parseInt(offset as string) : 0,
       };
 
-      console.log('📞 Calling syncService.pullData...');
+      logger.info('📞 Calling syncService.pullData...');
       const result = await this.syncService.pullData(userId, request);
-      console.log('✅ Got result from syncService:', { 
-        entitiesCount: result.entities.length, 
+      logger.info('✅ Got result from syncService:', {
+        entitiesCount: result.entities.length,
         conflictsCount: result.conflicts.length,
-        totalCount: result.totalCount 
+        totalCount: result.totalCount,
       });
-      
-      console.log('📤 Sending response...');
-      sendSuccess(res, result, 'Sync data pulled successfully');
-      console.log('✅ Response sent successfully');
 
+      logger.info('📤 Sending response...');
+      sendSuccess(res, result, 'Sync data pulled successfully');
+      logger.info('✅ Response sent successfully');
     } catch (error) {
-      console.error('❌ Error in pullData controller:', error);
+      logger.error('❌ Error in pullData controller:', error);
       next(error);
     }
   }
 
   // ==================== SYNC DATA PUSH ====================
 
-  async pushData(req: Request, res: Response, next: NextFunction): Promise<void> {
-
+  async pushData(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const userId = (req as any).user?._id || (req as any).user_id;
       const { entities } = req.body;
 
       if (!entities || !Array.isArray(entities)) {
-        sendError(res, 'Entities array is required', 400, 'SYNC_ENTITIES_REQUIRED');
+        sendError(
+          res,
+          'Entities array is required',
+          400,
+          'SYNC_ENTITIES_REQUIRED'
+        );
         return;
       }
 
       const result = await this.syncService.pushData(userId, entities);
       sendSuccess(res, result, 'Sync data pushed successfully');
-
     } catch (error) {
       next(error);
     }
@@ -74,20 +91,27 @@ export class SyncController {
 
   // ==================== BULK SYNC ====================
 
-  async bulkSync(req: Request, res: Response, next: NextFunction): Promise<void> {
-
+  async bulkSync(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const userId = (req as any).user?._id || (req as any).user_id;
       const { entities } = req.body;
 
       if (!entities || !Array.isArray(entities)) {
-        sendError(res, 'Entities array is required', 400, 'SYNC_ENTITIES_REQUIRED');
+        sendError(
+          res,
+          'Entities array is required',
+          400,
+          'SYNC_ENTITIES_REQUIRED'
+        );
         return;
       }
 
       const result = await this.syncService.bulkSync(userId, entities);
       sendSuccess(res, result, 'Bulk sync completed');
-
     } catch (error) {
       next(error);
     }
@@ -95,24 +119,34 @@ export class SyncController {
 
   // ==================== CONFLICTS ====================
 
-  async getConflicts(req: Request, res: Response, next: NextFunction): Promise<void> {
-
+  async getConflicts(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const userId = (req as any).user?._id || (req as any).user_id;
       const conflicts = await this.syncService.getConflicts(userId);
       sendSuccess(res, conflicts, 'Conflicts retrieved successfully');
-
     } catch (error) {
       next(error);
     }
   }
 
-  async resolveConflict(req: Request, res: Response, next: NextFunction): Promise<void> {
+  async resolveConflict(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const userId = (req as any).user?._id || (req as any).user_id;
       const conflictData: ConflictResolutionRequest = req.body;
 
-      if (!conflictData.entityId || !conflictData.entityType || !conflictData.resolution) {
+      if (
+        !conflictData.entityId ||
+        !conflictData.entityType ||
+        !conflictData.resolution
+      ) {
         sendError(
           res,
           'Entity ID, entity type, and resolution are required',
@@ -122,9 +156,11 @@ export class SyncController {
         return;
       }
 
-      const success = await this.syncService.resolveConflict(userId, conflictData);
+      const success = await this.syncService.resolveConflict(
+        userId,
+        conflictData
+      );
       sendSuccess(res, { success }, 'Conflict resolved successfully');
-
     } catch (error) {
       next(error);
     }
@@ -132,27 +168,31 @@ export class SyncController {
 
   // ==================== SYNC METADATA ====================
 
-  async getSyncMetadata(req: Request, res: Response, next: NextFunction): Promise<void> {
-
+  async getSyncMetadata(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const userId = (req as any).user?._id || (req as any).user_id;
       const metadata = await this.syncService.getSyncMetadata(userId);
       sendSuccess(res, metadata, 'Sync metadata retrieved successfully');
-
     } catch (error) {
       next(error);
     }
   }
 
-  async updateSyncMetadata(req: Request, res: Response, next: NextFunction): Promise<void> {
-
+  async updateSyncMetadata(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const userId = (req as any).user?._id || (req as any).user_id;
       const updates = req.body;
 
       await this.syncService.updateSyncMetadata(userId, updates);
       sendSuccess(res, { success: true }, 'Sync metadata updated successfully');
-
     } catch (error) {
       next(error);
     }
@@ -160,8 +200,11 @@ export class SyncController {
 
   // ==================== CLEANUP ====================
 
-  async cleanupSyncData(req: Request, res: Response, next: NextFunction): Promise<void> {
-
+  async cleanupSyncData(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const userId = (req as any).user?._id || (req as any).user_id;
       const { olderThanDays } = req.query;
@@ -169,7 +212,6 @@ export class SyncController {
 
       await this.syncService.cleanupOldSyncData(userId, days);
       sendSuccess(res, { success: true }, 'Sync data cleaned up successfully');
-
     } catch (error) {
       next(error);
     }
@@ -177,22 +219,25 @@ export class SyncController {
 
   // ==================== FORCE SYNC ====================
 
-  async forceSync(req: Request, res: Response, next: NextFunction): Promise<void> {
-
+  async forceSync(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const userId = (req as any).user?._id || (req as any).user_id;
-      
+
       // Update metadata to indicate syncing
       await this.syncService.updateSyncMetadata(userId, { isSyncing: true });
-      
+
       // Perform full sync
       const pullResult = await this.syncService.pullData(userId, {});
-      
+
       // Update metadata to indicate sync complete
-      await this.syncService.updateSyncMetadata(userId, { 
+      await this.syncService.updateSyncMetadata(userId, {
         isSyncing: false,
         lastSyncTime: new Date(),
-        totalEntities: pullResult.totalCount
+        totalEntities: pullResult.totalCount,
       });
 
       sendSuccess(
@@ -205,7 +250,6 @@ export class SyncController {
         },
         'Force sync completed'
       );
-
     } catch (error) {
       // Update metadata to indicate sync error
       const userId = (req as any).user?._id || (req as any).user_id;
@@ -218,24 +262,26 @@ export class SyncController {
 
   // ==================== SYNC STATUS ====================
 
-  async getSyncStatus(req: Request, res: Response, next: NextFunction): Promise<void> {
-
+  async getSyncStatus(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
     try {
       const userId = (req as any).user?._id || (req as any).user_id;
       const metadata = await this.syncService.getSyncMetadata(userId);
       const conflicts = await this.syncService.getConflicts(userId);
-      
+
       const status = {
         metadata,
         isOnline: true, // This would be determined by network status
         lastSyncTime: metadata.lastSyncTime,
         pendingCount: metadata.pendingCount,
         conflictCount: conflicts.length,
-        errorCount: metadata.errorCount
+        errorCount: metadata.errorCount,
       };
 
       sendSuccess(res, status, 'Sync status retrieved successfully');
-
     } catch (error) {
       next(error);
     }

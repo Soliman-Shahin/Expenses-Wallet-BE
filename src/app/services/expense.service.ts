@@ -1,12 +1,12 @@
-import { Expense } from "../models/expense.model";
-import mongoose from "mongoose";
+import { Expense } from '../models/expense.model';
+import mongoose from 'mongoose';
 
 export class ExpenseService {
   static async createExpense(data: any, userId: string) {
     const expense = new Expense({
       ...data,
       user: userId,
-      _syncStatus: "synced",
+      _syncStatus: 'synced',
       _lastModified: new Date(),
       _version: 1,
       _isDeleted: false,
@@ -20,7 +20,7 @@ export class ExpenseService {
       search?: string;
       category?: string;
       categories?: string;
-      type?: "income" | "outcome";
+      type?: 'income' | 'outcome';
       startDate?: string;
       endDate?: string;
       limit?: number;
@@ -47,7 +47,7 @@ export class ExpenseService {
 
       // Search filter
       if (filters?.search) {
-        query.description = { $regex: filters.search, $options: "i" };
+        query.description = { $regex: filters.search, $options: 'i' };
       }
 
       // Category filter (convert to ObjectId if present)
@@ -55,7 +55,7 @@ export class ExpenseService {
         query.category = new mongoose.Types.ObjectId(filters.category);
       } else if (filters?.categories) {
         const categoryIds = filters.categories
-          .split(",")
+          .split(',')
           .map((id) => new mongoose.Types.ObjectId(id));
         query.category = { $in: categoryIds };
       }
@@ -64,19 +64,19 @@ export class ExpenseService {
         { $match: query },
         {
           $lookup: {
-            from: "categories",
-            localField: "category",
-            foreignField: "_id",
-            as: "categoryDetails",
+            from: 'categories',
+            localField: 'category',
+            foreignField: '_id',
+            as: 'categoryDetails',
           },
         },
-        { $unwind: "$categoryDetails" },
-        { $match: { "categoryDetails.type": filters.type } },
+        { $unwind: '$categoryDetails' },
+        { $match: { 'categoryDetails.type': filters.type } },
         { $sort: { date: -1 } },
         // Add a stage to replace category ID with full category object
         {
           $addFields: {
-            category: "$categoryDetails",
+            category: '$categoryDetails',
           },
         },
         // Remove the temporary categoryDetails field
@@ -88,7 +88,7 @@ export class ExpenseService {
         {
           $facet: {
             data: [{ $skip: skip }, { $limit: limit }],
-            total: [{ $count: "count" }],
+            total: [{ $count: 'count' }],
           },
         },
       ];
@@ -121,14 +121,14 @@ export class ExpenseService {
 
     // Search filter
     if (filters?.search) {
-      query.description = { $regex: filters.search, $options: "i" };
+      query.description = { $regex: filters.search, $options: 'i' };
     }
 
     // Category filter
     if (filters?.category) {
       query.category = filters.category;
     } else if (filters?.categories) {
-      query.category = { $in: filters.categories.split(",") };
+      query.category = { $in: filters.categories.split(',') };
     }
 
     const skip = filters?.skip || 0;
@@ -136,7 +136,7 @@ export class ExpenseService {
 
     const [data, total] = await Promise.all([
       Expense.find(query)
-        .populate("category")
+        .populate('category')
         .sort({ date: -1 })
         .skip(skip)
         .limit(limit)
@@ -156,7 +156,7 @@ export class ExpenseService {
       _id: id,
       user: userId,
       _isDeleted: { $ne: true },
-    }).populate("category");
+    }).populate('category');
   }
 
   static async updateExpense(id: string, data: any, userId: string) {
@@ -169,12 +169,12 @@ export class ExpenseService {
       { _id: id, user: userId },
       {
         ...data,
-        _syncStatus: "synced",
+        _syncStatus: 'synced',
         _lastModified: new Date(),
         _version: currentVersion + 1,
       },
       { new: true, runValidators: true }
-    ).populate("category");
+    ).populate('category');
   }
 
   static async deleteExpense(id: string, userId: string) {
@@ -183,7 +183,7 @@ export class ExpenseService {
       { _id: id, user: userId },
       {
         _isDeleted: true,
-        _syncStatus: "synced",
+        _syncStatus: 'synced',
         _lastModified: new Date(),
       },
       { new: true }
@@ -208,24 +208,24 @@ export class ExpenseService {
       },
       {
         $lookup: {
-          from: "categories",
-          localField: "category",
-          foreignField: "_id",
-          as: "categoryDetails",
+          from: 'categories',
+          localField: 'category',
+          foreignField: '_id',
+          as: 'categoryDetails',
         },
       },
-      { $unwind: "$categoryDetails" },
+      { $unwind: '$categoryDetails' },
       {
         $group: {
-          _id: "$categoryDetails.type",
-          total: { $sum: "$amount" },
+          _id: '$categoryDetails.type',
+          total: { $sum: '$amount' },
         },
       },
     ]);
     const result = { income: 0, expenses: 0 };
     totals.forEach((item: any) => {
-      if (item._id === "income") result.income = item.total;
-      else if (item._id === "outcome") result.expenses = item.total;
+      if (item._id === 'income') result.income = item.total;
+      else if (item._id === 'outcome') result.expenses = item.total;
     });
     return result;
   }

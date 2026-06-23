@@ -1,19 +1,19 @@
-import { Schema, model, Document, Model } from "mongoose";
-import _ from "lodash";
-import jwt from "jsonwebtoken";
-import crypto from "crypto";
-import { config } from "dotenv";
+import { Schema, model, Document, Model } from 'mongoose';
+import _ from 'lodash';
+import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { config } from 'dotenv';
 config();
 
 enum SignupType {
-  Normal = "normal",
-  Facebook = "facebook",
-  Google = "google",
+  Normal = 'normal',
+  Facebook = 'facebook',
+  Google = 'google',
 }
 
 const TOKEN_SETTINGS = {
-  EXPIRATION_TIME: "1h",
-  ALGORITHM: "HS256" as const,
+  EXPIRATION_TIME: '1h',
+  ALGORITHM: 'HS256' as const,
   LENGTH: 64,
 };
 
@@ -106,8 +106,6 @@ const UserSchema = new Schema<UserDocument>(
 );
 
 // *** Indexes for performance ***
-// Index on email for fast user lookup during login/signup
-UserSchema.index({ email: 1 });
 // Index on socialId for OAuth lookups
 UserSchema.index({ socialId: 1 }, { sparse: true });
 // Compound index for session token lookups
@@ -119,7 +117,7 @@ UserSchema.methods.toJSON = function () {
   const userObject = user.toObject();
 
   // return the document except the password and sessions (these shouldn't be made available)
-  return _.omit(userObject, ["password", "sessions"]);
+  return _.omit(userObject, ['password', 'sessions']);
 };
 
 UserSchema.methods.generateAccessAuthToken =
@@ -129,7 +127,7 @@ UserSchema.methods.generateAccessAuthToken =
       const token: string = jwt.sign(
         { _id: this._id.toHexString() },
         jwtSecret,
-        { expiresIn: "1h", algorithm: "HS256" } // SignOptions including algorithm
+        { expiresIn: '1h', algorithm: 'HS256' } // SignOptions including algorithm
       );
       return token;
     } catch (error) {
@@ -139,10 +137,12 @@ UserSchema.methods.generateAccessAuthToken =
 
 UserSchema.methods.createRefreshToken = async function (): Promise<string> {
   const buf = crypto.randomBytes(TOKEN_SETTINGS.LENGTH);
-  return buf.toString("hex");
+  return buf.toString('hex');
 };
 
-UserSchema.methods.createSession = async function (this: UserDocument): Promise<string> {
+UserSchema.methods.createSession = async function (
+  this: UserDocument
+): Promise<string> {
   const refreshToken = await this.createRefreshToken();
   await saveSessionToDatabase(this, refreshToken);
   return refreshToken;
@@ -155,7 +155,7 @@ UserSchema.statics.findByIdAndToken = async function (
   id: string,
   token: string
 ): Promise<UserDocument | null> {
-  return this.findOne({ _id: id, "sessions.token": token });
+  return this.findOne({ _id: id, 'sessions.token': token });
 };
 
 UserSchema.statics.hasRefreshTokenExpired = function (
@@ -165,7 +165,10 @@ UserSchema.statics.hasRefreshTokenExpired = function (
 };
 
 /* HELPER METHODS */
-const saveSessionToDatabase = async (user: UserDocument, refreshToken: string): Promise<string> => {
+const saveSessionToDatabase = async (
+  user: UserDocument,
+  refreshToken: string
+): Promise<string> => {
   // This function saves a session to the database
   // It takes the user document and the refresh token as parameters
   // It updates the user document with the refresh token and its expiration time
@@ -205,5 +208,5 @@ const generateRefreshTokenExpiryTime = () => {
 };
 
 // Create the user model using generics
-const User = model<UserDocument, IUserModel>("User", UserSchema);
+const User = model<UserDocument, IUserModel>('User', UserSchema);
 export { User, UserDocument };

@@ -16,7 +16,11 @@ export interface AuthenticatedRequest extends Request {
   user?: { _id: string; email?: string };
 }
 
-export const verifyAccessToken = (req: Request, res: Response, next: NextFunction) => {
+export const verifyAccessToken = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const authReq = req as AuthenticatedRequest;
   try {
     const authHeader = req.header('Authorization');
@@ -30,29 +34,39 @@ export const verifyAccessToken = (req: Request, res: Response, next: NextFunctio
       );
     }
     const token = authHeader.split(' ')[1];
-    
+
     if (!token) {
       logger.warn('No token provided');
       return sendError(res, 'No token provided', 401, 'AUTH_NO_TOKEN');
     }
-    
+
     const payload = jwt.verify(token, ACCESS_TOKEN_SECRET) as any;
-    
+
     if (!payload._id) {
       logger.error('Invalid token payload - missing _id');
-      return sendError(res, 'Invalid token payload', 401, 'AUTH_INVALID_PAYLOAD');
+      return sendError(
+        res,
+        'Invalid token payload',
+        401,
+        'AUTH_INVALID_PAYLOAD'
+      );
     }
-    
+
     // Attach user id and user object to request for downstream use
     authReq.user_id = payload._id;
     authReq.user = { _id: payload._id, email: payload.email };
-    
+
     logger.debug('JWT verified successfully for user:', payload._id);
-    
+
     next();
   } catch (err: unknown) {
     const error = err as Error;
     logger.error('JWT verification failed:', error.message);
-    return sendError(res, 'Invalid or expired access token', 401, 'AUTH_INVALID_TOKEN');
+    return sendError(
+      res,
+      'Invalid or expired access token',
+      401,
+      'AUTH_INVALID_TOKEN'
+    );
   }
 };

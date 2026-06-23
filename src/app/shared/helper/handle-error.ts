@@ -1,4 +1,4 @@
-import { Response, Request, NextFunction } from "express";
+import { Response, Request, NextFunction } from 'express';
 // Base custom error class
 class BaseError extends Error {
   code: string;
@@ -13,14 +13,14 @@ class BaseError extends Error {
 // NotFoundError class
 class NotFoundError extends BaseError {
   constructor(message: string) {
-    super("NotFoundError", "ENOENT", message);
+    super('NotFoundError', 'ENOENT', message);
   }
 }
 
 // ValidationError class
 class ValidationError extends BaseError {
   constructor(message: string) {
-    super("ValidationError", "EVALID", message);
+    super('ValidationError', 'EVALID', message);
   }
 }
 
@@ -36,13 +36,13 @@ const handleError = (
     error instanceof NotFoundError
       ? 404
       : error instanceof ValidationError
-      ? 400
-      : 500;
+        ? 400
+        : 500;
 
   // Send the error response
   res.status(statusCode).send({
     status: statusCode,
-    message: error.message || "An unexpected error occurred",
+    message: error.message || 'An unexpected error occurred',
   });
 };
 

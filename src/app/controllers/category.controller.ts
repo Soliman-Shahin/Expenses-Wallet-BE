@@ -10,7 +10,10 @@ interface CategoryQueryParams {
 }
 
 // Create a new category
-const createCategory = async (req: Request & { user_id?: string }, res: Response) => {
+const createCategory = async (
+  req: Request & { user_id?: string },
+  res: Response
+) => {
   try {
     const userId = req.user_id as string;
     const category = await CategoryService.createCategory(req.body, userId);
@@ -21,7 +24,10 @@ const createCategory = async (req: Request & { user_id?: string }, res: Response
 };
 
 // Get all categories with filtering and pagination
-const getCategories = async (req: Request & { user_id?: string }, res: Response) => {
+const getCategories = async (
+  req: Request & { user_id?: string },
+  res: Response
+) => {
   try {
     const userId = req.user_id as string;
     const result = await CategoryService.getCategories(req.query, userId);
@@ -32,9 +38,12 @@ const getCategories = async (req: Request & { user_id?: string }, res: Response)
 };
 
 // Get category by id
-const getCategoryById = async (req: Request & { user_id?: string }, res: Response) => {
+const getCategoryById = async (
+  req: Request & { user_id?: string },
+  res: Response
+) => {
   try {
-    const id = req.params.id;
+    const id = req.params.id as string;
     const userId = req.user_id as string;
     const category = await CategoryService.getCategoryById(id, userId);
     if (!category) {
@@ -47,9 +56,12 @@ const getCategoryById = async (req: Request & { user_id?: string }, res: Respons
 };
 
 // Update a category
-const updateCategory = async (req: Request & { user_id?: string }, res: Response) => {
+const updateCategory = async (
+  req: Request & { user_id?: string },
+  res: Response
+) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const userId = req.user_id as string;
     const category = await CategoryService.updateCategory(id, req.body, userId);
     if (!category) {
@@ -62,9 +74,12 @@ const updateCategory = async (req: Request & { user_id?: string }, res: Response
 };
 
 // Delete a category
-const deleteCategory = async (req: Request & { user_id?: string }, res: Response) => {
+const deleteCategory = async (
+  req: Request & { user_id?: string },
+  res: Response
+) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const userId = req.user_id as string;
     const category = await CategoryService.deleteCategory(id, userId);
     if (!category) {
@@ -77,7 +92,10 @@ const deleteCategory = async (req: Request & { user_id?: string }, res: Response
 };
 
 // update categories order
-const updateOrder = async (req: Request & { user_id?: string }, res: Response) => {
+const updateOrder = async (
+  req: Request & { user_id?: string },
+  res: Response
+) => {
   try {
     const userId = req.user_id as string;
     const { categories } = req.body;

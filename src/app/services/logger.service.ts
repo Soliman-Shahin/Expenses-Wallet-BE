@@ -1,4 +1,5 @@
-import { Request } from "express";
+import logger from './logger.service';
+import { Request } from 'express';
 
 /**
  * Advanced Logger Service
@@ -50,7 +51,7 @@ class Logger {
   private isProduction: boolean;
 
   constructor() {
-    this.isProduction = process.env.NODE_ENV === "production";
+    this.isProduction = process.env.NODE_ENV === 'production';
     this.minLevel = this.isProduction ? LogLevel.INFO : LogLevel.DEBUG;
   }
 
@@ -134,13 +135,13 @@ class Logger {
    */
   private getLevelEmoji(level: string): string {
     const emojis: Record<string, string> = {
-      DEBUG: "🔍",
-      INFO: "ℹ️",
-      WARN: "⚠️",
-      ERROR: "❌",
-      FATAL: "💀",
+      DEBUG: '🔍',
+      INFO: 'ℹ️',
+      WARN: '⚠️',
+      ERROR: '❌',
+      FATAL: '💀',
     };
-    return emojis[level] || "ℹ️";
+    return emojis[level] || 'ℹ️';
   }
 
   /**
@@ -152,11 +153,11 @@ class Logger {
 
     if (level >= this.minLevel) {
       if (level >= LogLevel.ERROR) {
-        console.error(formatted);
+        logger.error(formatted);
       } else if (level >= LogLevel.WARN) {
-        console.warn(formatted);
+        logger.warn(formatted);
       } else {
-        console.log(formatted);
+        logger.info(formatted);
       }
     }
   }
@@ -258,7 +259,7 @@ class Logger {
       ip: req.ip || req.socket.remoteAddress,
       method: req.method,
       path: req.path,
-      userAgent: req.get("user-agent"),
+      userAgent: req.get('user-agent'),
     };
   }
 
@@ -287,7 +288,10 @@ class Logger {
  * Context logger - maintains default context for all logs
  */
 class ContextLogger {
-  constructor(private logger: Logger, private defaultContext: LogContext) {}
+  constructor(
+    private logger: Logger,
+    private defaultContext: LogContext
+  ) {}
 
   private mergeContext(context?: LogContext): LogContext {
     return { ...this.defaultContext, ...context };

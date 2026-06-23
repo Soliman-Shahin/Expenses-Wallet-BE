@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from "express";
-import { sendError } from "../shared/helper";
+import { Request, Response, NextFunction } from 'express';
+import { sendError } from '../shared/helper';
 
 /**
  * Advanced Rate Limiting Middleware
@@ -36,7 +36,7 @@ class RateLimiter {
 
   constructor(config: RateLimitConfig) {
     this.config = {
-      message: "Too many requests, please try again later",
+      message: 'Too many requests, please try again later',
       statusCode: 429,
       skipSuccessfulRequests: false,
       skipFailedRequests: false,
@@ -59,7 +59,7 @@ class RateLimiter {
   private getKey(req: Request): string {
     // Use user ID if authenticated, otherwise use IP
     const userId = (req as any).user_id;
-    return userId || req.ip || req.socket.remoteAddress || "unknown";
+    return userId || req.ip || req.socket.remoteAddress || 'unknown';
   }
 
   public middleware() {
@@ -85,20 +85,20 @@ class RateLimiter {
       const remaining = Math.max(0, this.config.maxRequests - record.count);
       const resetTime = Math.ceil(record.resetTime / 1000);
 
-      res.setHeader("X-RateLimit-Limit", this.config.maxRequests.toString());
-      res.setHeader("X-RateLimit-Remaining", remaining.toString());
-      res.setHeader("X-RateLimit-Reset", resetTime.toString());
+      res.setHeader('X-RateLimit-Limit', this.config.maxRequests.toString());
+      res.setHeader('X-RateLimit-Remaining', remaining.toString());
+      res.setHeader('X-RateLimit-Reset', resetTime.toString());
 
       // Check if limit exceeded
       if (record.count > this.config.maxRequests) {
         const retryAfter = Math.ceil((record.resetTime - now) / 1000);
-        res.setHeader("Retry-After", retryAfter.toString());
+        res.setHeader('Retry-After', retryAfter.toString());
 
         return sendError(
           res,
           this.config.message!,
           this.config.statusCode!,
-          "RATE_LIMIT_EXCEEDED",
+          'RATE_LIMIT_EXCEEDED',
           { retryAfter }
         );
       }
@@ -127,7 +127,7 @@ export function createRateLimiter(config: RateLimitConfig) {
 export const strictAuthRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   maxRequests: 5,
-  message: "Too many authentication attempts, please try again later",
+  message: 'Too many authentication attempts, please try again later',
 });
 
 /**
@@ -137,7 +137,7 @@ export const strictAuthRateLimiter = createRateLimiter({
 export const standardRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   maxRequests: 100,
-  message: "Too many requests, please try again later",
+  message: 'Too many requests, please try again later',
 });
 
 /**
@@ -147,7 +147,7 @@ export const standardRateLimiter = createRateLimiter({
 export const lenientRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   maxRequests: 200,
-  message: "Too many requests, please try again later",
+  message: 'Too many requests, please try again later',
 });
 
 /**
@@ -157,7 +157,7 @@ export const lenientRateLimiter = createRateLimiter({
 export const veryStrictRateLimiter = createRateLimiter({
   windowMs: 60 * 60 * 1000, // 1 hour
   maxRequests: 10,
-  message: "Too many requests for this operation, please try again later",
+  message: 'Too many requests for this operation, please try again later',
 });
 
 export default {

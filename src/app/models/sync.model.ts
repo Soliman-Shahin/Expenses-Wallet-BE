@@ -1,4 +1,4 @@
-import { Schema, model, Document } from 'mongoose';
+import { Schema, model, Document, Types } from 'mongoose';
 
 export interface ISyncOperation extends Document {
   id: string;
@@ -11,7 +11,7 @@ export interface ISyncOperation extends Document {
   maxRetries: number;
   status: 'synced' | 'pending' | 'conflict' | 'error' | 'offline';
   error?: string;
-  user: Schema.Types.ObjectId;
+  user: Types.ObjectId;
 }
 
 export interface IConflictResolution extends Document {
@@ -22,7 +22,7 @@ export interface IConflictResolution extends Document {
   resolution: 'local' | 'server' | 'merge';
   mergedData?: any;
   timestamp: Date;
-  user: Schema.Types.ObjectId;
+  user: Types.ObjectId;
 }
 
 export interface ISyncMetadata extends Document {
@@ -33,34 +33,34 @@ export interface ISyncMetadata extends Document {
   errorCount: number;
   isOnline: boolean;
   isSyncing: boolean;
-  user: Schema.Types.ObjectId;
+  user: Types.ObjectId;
 }
 
 const syncOperationSchema = new Schema(
   {
     id: { type: String, required: true, unique: true },
-    type: { 
-      type: String, 
+    type: {
+      type: String,
       enum: ['CREATE', 'UPDATE', 'DELETE'],
-      required: true 
+      required: true,
     },
-    entityType: { 
-      type: String, 
+    entityType: {
+      type: String,
       enum: ['expense', 'category', 'user'],
-      required: true 
+      required: true,
     },
     entityId: { type: String, required: true },
     data: { type: Schema.Types.Mixed, required: true },
     timestamp: { type: Date, default: Date.now },
     retryCount: { type: Number, default: 0 },
     maxRetries: { type: Number, default: 3 },
-    status: { 
-      type: String, 
+    status: {
+      type: String,
       enum: ['synced', 'pending', 'conflict', 'error', 'offline'],
-      default: 'pending'
+      default: 'pending',
     },
     error: { type: String },
-    user: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true }
 );
@@ -71,14 +71,14 @@ const conflictResolutionSchema = new Schema(
     entityType: { type: String, required: true },
     localData: { type: Schema.Types.Mixed, required: true },
     serverData: { type: Schema.Types.Mixed, required: true },
-    resolution: { 
-      type: String, 
+    resolution: {
+      type: String,
       enum: ['local', 'server', 'merge'],
-      required: true 
+      required: true,
     },
     mergedData: { type: Schema.Types.Mixed },
     timestamp: { type: Date, default: Date.now },
-    user: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true }
 );
@@ -92,7 +92,12 @@ const syncMetadataSchema = new Schema(
     errorCount: { type: Number, default: 0 },
     isOnline: { type: Boolean, default: true },
     isSyncing: { type: Boolean, default: false },
-    user: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true }
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      unique: true,
+    },
   },
   { timestamps: true }
 );
@@ -100,13 +105,19 @@ const syncMetadataSchema = new Schema(
 // Indexes for sync operations
 syncOperationSchema.index({ user: 1, status: 1 });
 syncOperationSchema.index({ user: 1, timestamp: -1 });
-syncOperationSchema.index({ id: 1 });
 
 conflictResolutionSchema.index({ user: 1, timestamp: -1 });
 conflictResolutionSchema.index({ entityId: 1, entityType: 1 });
 
-syncMetadataSchema.index({ user: 1 });
-
-export const SyncOperation = model<ISyncOperation>('SyncOperation', syncOperationSchema);
-export const ConflictResolution = model<IConflictResolution>('ConflictResolution', conflictResolutionSchema);
-export const SyncMetadata = model<ISyncMetadata>('SyncMetadata', syncMetadataSchema);
+export const SyncOperation = model<ISyncOperation>(
+  'SyncOperation',
+  syncOperationSchema
+);
+export const ConflictResolution = model<IConflictResolution>(
+  'ConflictResolution',
+  conflictResolutionSchema
+);
+export const SyncMetadata = model<ISyncMetadata>(
+  'SyncMetadata',
+  syncMetadataSchema
+);

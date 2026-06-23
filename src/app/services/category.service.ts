@@ -1,5 +1,5 @@
-import { Category } from "../models/category.model";
-import { Types } from "mongoose";
+import { Category } from '../models/category.model';
+import { Types } from 'mongoose';
 
 export class CategoryService {
   static async createCategory(data: any, userId: string) {
@@ -9,26 +9,26 @@ export class CategoryService {
       _syncStatus: 'synced',
       _lastModified: new Date(),
       _version: 1,
-      _isDeleted: false
+      _isDeleted: false,
     });
     return category.save();
   }
 
   static async getCategories(query: any, userId: string) {
-    const { q, type, page = 1, limit = 10, sort = "order" } = query;
+    const { q, type, page = 1, limit = 10, sort = 'order' } = query;
     const filter: Record<string, any> = {
       user: userId,
-      _isDeleted: { $ne: true } // Exclude deleted items from normal queries
+      _isDeleted: { $ne: true }, // Exclude deleted items from normal queries
     };
-    if (q) filter.title = { $regex: q, $options: "i" };
+    if (q) filter.title = { $regex: q, $options: 'i' };
     if (type) filter.type = type;
-    const sortField = sort.startsWith("-") ? sort.substring(1) : sort;
-    const sortOrder = sort.startsWith("-") ? -1 : 1;
+    const sortField = sort.startsWith('-') ? sort.substring(1) : sort;
+    const sortOrder = sort.startsWith('-') ? -1 : 1;
     const sortObj: Record<string, 1 | -1> = {
       [sortField]: sortOrder as 1 | -1,
     };
     const data = await Category.find(filter)
-      .populate("user", "name")
+      .populate('user', 'name')
       .sort(sortObj)
       .skip((page - 1) * limit)
       .limit(Number(limit));
@@ -40,8 +40,8 @@ export class CategoryService {
     return Category.findOne({
       _id: id,
       user: userId,
-      _isDeleted: { $ne: true }
-    }).populate("user", "name");
+      _isDeleted: { $ne: true },
+    }).populate('user', 'name');
   }
 
   static async updateCategory(id: string, data: any, userId: string) {
@@ -49,7 +49,7 @@ export class CategoryService {
     if (!category) return null;
 
     const currentVersion = category._version || 0;
-    
+
     return Category.findOneAndUpdate(
       { _id: id, user: userId },
       {
@@ -57,7 +57,7 @@ export class CategoryService {
         modified: new Date(),
         _syncStatus: 'synced',
         _lastModified: new Date(),
-        _version: currentVersion + 1
+        _version: currentVersion + 1,
       },
       { new: true }
     );
@@ -71,7 +71,7 @@ export class CategoryService {
     }
 
     if (category.isDefault) {
-      throw new Error("The default category cannot be deleted.");
+      throw new Error('The default category cannot be deleted.');
     }
 
     // Soft delete for sync purposes
@@ -80,7 +80,7 @@ export class CategoryService {
       {
         _isDeleted: true,
         _syncStatus: 'synced',
-        _lastModified: new Date()
+        _lastModified: new Date(),
       },
       { new: true }
     );
@@ -100,9 +100,9 @@ export class CategoryService {
           $set: {
             order: category.order,
             _syncStatus: 'synced',
-            _lastModified: new Date()
+            _lastModified: new Date(),
           },
-          $inc: { _version: 1 }
+          $inc: { _version: 1 },
         } as any,
       },
     }));

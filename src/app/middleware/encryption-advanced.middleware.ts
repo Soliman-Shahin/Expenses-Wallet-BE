@@ -1,11 +1,15 @@
-import { Request, Response, NextFunction } from "express";
+import logger from '../services/logger.service';
+import { Request, Response, NextFunction } from 'express';
 import {
   encryptAdvanced,
   decryptAdvanced,
   encryptFieldsDeep,
   decryptFieldsDeep,
-} from "../shared/encryption-advanced";
-import { decryptCryptoJS, isCryptoJSFormat } from "../shared/encryption-cryptojs-compat";
+} from '../shared/encryption-advanced';
+import {
+  decryptCryptoJS,
+  isCryptoJSFormat,
+} from '../shared/encryption-cryptojs-compat';
 
 /**
  * Enhanced Encryption Middleware with Selective Encryption
@@ -29,16 +33,16 @@ interface EncryptionOptions {
 }
 
 const defaultOptions: EncryptionOptions = {
-  excludePaths: ["/health", "/v1/health", "/favicon.ico"],
+  excludePaths: ['/health', '/v1/health', '/favicon.ico'],
   includePaths: [
-    "/v1/user/login",
-    "/v1/user/signup",
-    "/v1/user/me",
-    "/v1/user/auth/google/native",
-    "/v1/user/auth/facebook/native",
-    "/v1/expenses",
-    "/v1/categories",
-    "/v1/sync",
+    '/v1/user/login',
+    '/v1/user/signup',
+    '/v1/user/me',
+    '/v1/user/auth/google/native',
+    '/v1/user/auth/facebook/native',
+    '/v1/expenses',
+    '/v1/categories',
+    '/v1/sync',
   ],
   encryptByDefault: false,
   maxPayloadSize: 10 * 1024 * 1024, // 10MB
@@ -66,11 +70,11 @@ function shouldEncryptPath(path: string, options: EncryptionOptions): boolean {
  * Check if data is already encrypted (our format: iv:authTag:data)
  */
 function isAlreadyEncrypted(data: any): boolean {
-  if (typeof data === "string") {
-    const parts = data.split(":");
+  if (typeof data === 'string') {
+    const parts = data.split(':');
     return parts.length === 3;
   }
-  if (data && typeof data === "object" && data.encrypted === true) {
+  if (data && typeof data === 'object' && data.encrypted === true) {
     return true;
   }
   return false;
@@ -79,7 +83,7 @@ function isAlreadyEncrypted(data: any): boolean {
 /**
  * Create encryption middleware with custom options
  */
-const SENSITIVE_FIELDS = ["id", "_id"];
+const SENSITIVE_FIELDS = ['id', '_id'];
 
 /**
  * Create encryption middleware with custom options
@@ -98,48 +102,84 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
     // ============================================
     // DECRYPT INCOMING REQUEST BODY
     // ============================================
-    if (req.body && typeof req.body === "object") {
-      console.log("🔍 [Encryption Middleware] Request body:", JSON.stringify(req.body).substring(0, 200));
-      
+    if (req.body && typeof req.body === 'object') {
+      logger.info(
+        '🔍 [Encryption Middleware] Request body:',
+        JSON.stringify(req.body).substring(0, 200)
+      );
+
       try {
         // Check if Frontend sent full payload encryption: { data: "encrypted_string" }
-        if (req.body.data && typeof req.body.data === "string" && !req.body.email && !req.body.password) {
-          console.log("🔍 [Encryption Middleware] Detected encrypted payload");
-          console.log("🔍 [Encryption Middleware] Data preview:", req.body.data.substring(0, 50));
-          
+        if (
+          req.body.data &&
+          typeof req.body.data === 'string' &&
+          !req.body.email &&
+          !req.body.password
+        ) {
+          logger.info('🔍 [Encryption Middleware] Detected encrypted payload');
+          logger.info(
+            '🔍 [Encryption Middleware] Data preview:',
+            req.body.data.substring(0, 50)
+          );
+
           // Full payload encryption from Frontend (CryptoJS format)
           try {
             // Check if it's CryptoJS format (from Frontend)
             if (isCryptoJSFormat(req.body.data)) {
-              console.log("✅ [Encryption Middleware] CryptoJS format detected");
+              logger.info(
+                '✅ [Encryption Middleware] CryptoJS format detected'
+              );
               const decrypted = decryptCryptoJS(req.body.data);
               if (decrypted) {
                 req.body = decrypted;
-                console.log("✅ [Encryption Middleware] CryptoJS decryption successful");
-                console.log("🔍 [Encryption Middleware] Decrypted body:", JSON.stringify(req.body));
+                logger.info(
+                  '✅ [Encryption Middleware] CryptoJS decryption successful'
+                );
+                logger.info(
+                  '🔍 [Encryption Middleware] Decrypted body:',
+                  JSON.stringify(req.body)
+                );
               }
             } else {
-              console.log("🔍 [Encryption Middleware] Trying AES-256-GCM format");
+              logger.info(
+                '🔍 [Encryption Middleware] Trying AES-256-GCM format'
+              );
               // Try AES-256-GCM format (advanced encryption)
               const decrypted = decryptAdvanced(req.body.data);
               if (decrypted) {
-                req.body = typeof decrypted === 'string' ? JSON.parse(decrypted) : decrypted;
-                console.log("✅ [Encryption Middleware] Advanced decryption successful");
+                req.body =
+                  typeof decrypted === 'string'
+                    ? JSON.parse(decrypted)
+                    : decrypted;
+                logger.info(
+                  '✅ [Encryption Middleware] Advanced decryption successful'
+                );
               }
             }
           } catch (decryptError: unknown) {
-            console.error("❌ [Encryption Middleware] Full payload decryption failed:", decryptError);
+            logger.error(
+              '❌ [Encryption Middleware] Full payload decryption failed:',
+              decryptError
+            );
             const err = decryptError as Error;
-            console.error("❌ [Encryption Middleware] Error details:", err.message || 'Unknown error');
+            logger.error(
+              '❌ [Encryption Middleware] Error details:',
+              err.message || 'Unknown error'
+            );
             // Fall through to field-level decryption
           }
         } else {
-          console.log("🔍 [Encryption Middleware] No encrypted payload detected, using field-level");
+          logger.info(
+            '🔍 [Encryption Middleware] No encrypted payload detected, using field-level'
+          );
           // Field-level encryption (original behavior)
           req.body = decryptFieldsDeep(req.body, SENSITIVE_FIELDS);
         }
       } catch (error) {
-        console.error("❌ [Encryption Middleware] Request decryption error:", error);
+        logger.error(
+          '❌ [Encryption Middleware] Request decryption error:',
+          error
+        );
         // Continue with original body if decryption fails
       }
     }
@@ -151,9 +191,9 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
 
     res.json = function (body: any): Response {
       // TEMPORARILY DISABLED - Response encryption off for debugging
-      console.log("📤 [Encryption Middleware] Sending unencrypted response");
+      logger.info('📤 [Encryption Middleware] Sending unencrypted response');
       return originalJson(body);
-      
+
       /* Original encryption code - commented out for debugging
       // Skip encryption for errors
       if (!body) {
@@ -163,7 +203,7 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
       // Check payload size
       const bodySize = JSON.stringify(body).length;
       if (options.maxPayloadSize && bodySize > options.maxPayloadSize) {
-        console.warn(
+        logger.warn(
           `⚠️  Payload too large for encryption (${bodySize} bytes), skipping`
         );
         return originalJson(body);
@@ -174,7 +214,7 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
         const encryptedBody = encryptFieldsDeep(body, SENSITIVE_FIELDS);
         return originalJson(encryptedBody);
       } catch (error) {
-        console.error("❌ Response field encryption error:", error);
+        logger.error("❌ Response field encryption error:", error);
         // Fall back to unencrypted response
         return originalJson(body);
       }

@@ -23,7 +23,7 @@ export interface PasswordRequirements {
 
 export interface PasswordValidationResult {
   isValid: boolean;
-  strength: "weak" | "fair" | "good" | "strong" | "very-strong";
+  strength: 'weak' | 'fair' | 'good' | 'strong' | 'very-strong';
   score: number; // 0-100
   errors: string[];
   suggestions: string[];
@@ -43,41 +43,41 @@ const defaultRequirements: PasswordRequirements = {
 
 // Common passwords to prevent (top 100 most common)
 const COMMON_PASSWORDS = [
-  "password",
-  "123456",
-  "12345678",
-  "qwerty",
-  "abc123",
-  "monkey",
-  "1234567",
-  "letmein",
-  "trustno1",
-  "dragon",
-  "baseball",
-  "iloveyou",
-  "master",
-  "sunshine",
-  "ashley",
-  "bailey",
-  "passw0rd",
-  "shadow",
-  "123123",
-  "654321",
-  "superman",
-  "qazwsx",
-  "michael",
-  "football",
-  "password1",
-  "123456789",
-  "welcome",
-  "admin",
-  "changeme",
-  "test",
-  "guest",
-  "demo",
-  "user",
-  "root",
-  "default",
+  'password',
+  '123456',
+  '12345678',
+  'qwerty',
+  'abc123',
+  'monkey',
+  '1234567',
+  'letmein',
+  'trustno1',
+  'dragon',
+  'baseball',
+  'iloveyou',
+  'master',
+  'sunshine',
+  'ashley',
+  'bailey',
+  'passw0rd',
+  'shadow',
+  '123123',
+  '654321',
+  'superman',
+  'qazwsx',
+  'michael',
+  'football',
+  'password1',
+  '123456789',
+  'welcome',
+  'admin',
+  'changeme',
+  'test',
+  'guest',
+  'demo',
+  'user',
+  'root',
+  'default',
 ];
 
 export class PasswordValidator {
@@ -112,16 +112,16 @@ export class PasswordValidator {
 
     // Check for uppercase
     if (this.requirements.requireUppercase && !/[A-Z]/.test(password)) {
-      errors.push("Password must contain at least one uppercase letter");
-      suggestions.push("Add at least one uppercase letter (A-Z)");
+      errors.push('Password must contain at least one uppercase letter');
+      suggestions.push('Add at least one uppercase letter (A-Z)');
     } else if (/[A-Z]/.test(password)) {
       score += 15;
     }
 
     // Check for lowercase
     if (this.requirements.requireLowercase && !/[a-z]/.test(password)) {
-      errors.push("Password must contain at least one lowercase letter");
-      suggestions.push("Add at least one lowercase letter (a-z)");
+      errors.push('Password must contain at least one lowercase letter');
+      suggestions.push('Add at least one lowercase letter (a-z)');
     } else if (/[a-z]/.test(password)) {
       score += 15;
     }
@@ -129,8 +129,8 @@ export class PasswordValidator {
     // Check for numbers
     const numberCount = (password.match(/[0-9]/g) || []).length;
     if (this.requirements.requireNumbers && numberCount === 0) {
-      errors.push("Password must contain at least one number");
-      suggestions.push("Add at least one number (0-9)");
+      errors.push('Password must contain at least one number');
+      suggestions.push('Add at least one number (0-9)');
     } else if (numberCount > 0) {
       score += 15;
       if (
@@ -146,8 +146,8 @@ export class PasswordValidator {
     const specialCharCount = specialChars.length;
 
     if (this.requirements.requireSpecialChars && specialCharCount === 0) {
-      errors.push("Password must contain at least one special character");
-      suggestions.push("Add at least one special character (!@#$%^&*)");
+      errors.push('Password must contain at least one special character');
+      suggestions.push('Add at least one special character (!@#$%^&*)');
     } else if (specialCharCount > 0) {
       score += 15;
       if (
@@ -162,8 +162,8 @@ export class PasswordValidator {
     if (this.requirements.preventCommonPasswords) {
       const lowerPassword = password.toLowerCase();
       if (COMMON_PASSWORDS.includes(lowerPassword)) {
-        errors.push("This password is too common and easily guessable");
-        suggestions.push("Choose a more unique password");
+        errors.push('This password is too common and easily guessable');
+        suggestions.push('Choose a more unique password');
         score = Math.min(score, 20); // Cap score for common passwords
       }
     }
@@ -197,12 +197,12 @@ export class PasswordValidator {
     score = Math.max(0, Math.min(100, score));
 
     // Determine strength
-    let strength: PasswordValidationResult["strength"];
-    if (score < 30) strength = "weak";
-    else if (score < 50) strength = "fair";
-    else if (score < 70) strength = "good";
-    else if (score < 90) strength = "strong";
-    else strength = "very-strong";
+    let strength: PasswordValidationResult['strength'];
+    if (score < 30) strength = 'weak';
+    else if (score < 50) strength = 'fair';
+    else if (score < 70) strength = 'good';
+    else if (score < 90) strength = 'strong';
+    else strength = 'very-strong';
 
     return {
       isValid: errors.length === 0,
@@ -218,11 +218,11 @@ export class PasswordValidator {
    */
   private hasSequentialChars(password: string): boolean {
     const sequences = [
-      "0123456789",
-      "abcdefghijklmnopqrstuvwxyz",
-      "qwertyuiop",
-      "asdfghjkl",
-      "zxcvbnm",
+      '0123456789',
+      'abcdefghijklmnopqrstuvwxyz',
+      'qwertyuiop',
+      'asdfghjkl',
+      'zxcvbnm',
     ];
     const lowerPassword = password.toLowerCase();
 
@@ -231,7 +231,7 @@ export class PasswordValidator {
         const subseq = seq.substring(i, i + 3);
         if (
           lowerPassword.includes(subseq) ||
-          lowerPassword.includes(subseq.split("").reverse().join(""))
+          lowerPassword.includes(subseq.split('').reverse().join(''))
         ) {
           return true;
         }
@@ -273,13 +273,13 @@ export class PasswordValidator {
    * Generate a strong random password
    */
   public generateStrongPassword(length: number = 16): string {
-    const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const lowercase = "abcdefghijklmnopqrstuvwxyz";
-    const numbers = "0123456789";
-    const special = "!@#$%^&*()_+-=[]{}|;:,.<>?";
+    const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
 
     const allChars = uppercase + lowercase + numbers + special;
-    let password = "";
+    let password = '';
 
     // Ensure at least one of each required type
     password += uppercase[Math.floor(Math.random() * uppercase.length)];
@@ -294,9 +294,9 @@ export class PasswordValidator {
 
     // Shuffle the password
     return password
-      .split("")
+      .split('')
       .sort(() => Math.random() - 0.5)
-      .join("");
+      .join('');
   }
 }
 

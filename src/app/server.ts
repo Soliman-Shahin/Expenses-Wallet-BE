@@ -1,7 +1,8 @@
-import { config } from "dotenv";
-import { connectToDB } from "./db";
-import { configureExpressApp } from "./app";
-import logger from "./utils/logger";
+import logger from './services/logger.service';
+import { config } from 'dotenv';
+import { connectToDB } from './db';
+import { configureExpressApp } from './app';
+import logger from './utils/logger';
 
 const DEFAULT_PORT = 3000;
 
@@ -23,8 +24,8 @@ function validateEnvironmentVariables(): void {
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(', ')}\n` +
-      'Please check your .env file and ensure all required variables are set.\n' +
-      'See .env.example for reference.'
+        'Please check your .env file and ensure all required variables are set.\n' +
+        'See .env.example for reference.'
     );
   }
 
@@ -33,7 +34,7 @@ function validateEnvironmentVariables(): void {
   if (encryptionKey.length < 64) {
     logger.warn(
       '[WARNING] ENCRYPTION_KEY should be at least 64 characters (32 bytes) for AES-256.\n' +
-      'Generate a secure key with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+        "Generate a secure key with: node -e \"logger.info(require('crypto').randomBytes(32).toString('hex'))\""
     );
   }
 
@@ -43,7 +44,7 @@ function validateEnvironmentVariables(): void {
 async function startServer() {
   try {
     config();
-    
+
     // Validate environment variables before starting
     validateEnvironmentVariables();
 
@@ -56,12 +57,12 @@ async function startServer() {
       logger.info(`[server]: Server is running at http://localhost:${port}`);
     });
   } catch (error) {
-    logger.error("Failed to start server:", error);
+    logger.error('Failed to start server:', error);
     process.exit(1);
   }
 }
 
 startServer().catch((error) => {
-  logger.error("Failed to start server:", error);
+  logger.error('Failed to start server:', error);
   process.exit(1);
 });

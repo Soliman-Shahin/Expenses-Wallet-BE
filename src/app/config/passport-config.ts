@@ -1,8 +1,8 @@
-import passport from "passport";
-import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { User } from "../models";
-import dotenv from "dotenv";
-import logger from "../utils/logger";
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import { User } from '../models';
+import dotenv from 'dotenv';
+import logger from '../utils/logger';
 
 // Initialize dotenv to use environment variables
 dotenv.config();
@@ -46,7 +46,7 @@ passport.use(
             // Preserve existing signupType if it was already social; otherwise set to google
             if (
               !existingByEmail.signupType ||
-              existingByEmail.signupType === "normal"
+              existingByEmail.signupType === 'normal'
             ) {
               existingByEmail.signupType = profile.provider as any;
             }
@@ -66,7 +66,7 @@ passport.use(
           signupType: profile.provider,
           email: email,
           username: profile.displayName,
-          image: (profile.photos && profile.photos[0]?.value) || "profile.png",
+          image: (profile.photos && profile.photos[0]?.value) || 'profile.png',
         });
         await newUser.save();
         return done(null, newUser);
@@ -78,7 +78,6 @@ passport.use(
     }
   )
 );
-
 
 passport.serializeUser((user, done) => {
   done(null, user);

@@ -1,16 +1,17 @@
-import { Expense } from "../models/expense.model";
-import { Category } from "../models/category.model";
-import { User } from "../models/user.model";
+import logger from './logger.service';
+import { Expense } from '../models/expense.model';
+import { Category } from '../models/category.model';
+import { User } from '../models/user.model';
 import {
   SyncOperation,
   ConflictResolution,
   SyncMetadata,
-} from "../models/sync.model";
-import mongoose from "mongoose";
+} from '../models/sync.model';
+import mongoose from 'mongoose';
 
 export interface SyncRequest {
   lastSyncTime?: Date;
-  entityType?: "expense" | "outcome" | "category" | "user";
+  entityType?: 'expense' | 'outcome' | 'category' | 'user';
   limit?: number;
   offset?: number;
 }
@@ -26,7 +27,7 @@ export interface SyncResponse {
 export interface ConflictResolutionRequest {
   entityId: string;
   entityType: string;
-  resolution: "local" | "server" | "merge";
+  resolution: 'local' | 'server' | 'merge';
   mergedData?: any;
 }
 
@@ -50,7 +51,7 @@ export class SyncService {
   async pullData(userId: string, request: SyncRequest): Promise<SyncResponse> {
     const { lastSyncTime, entityType, limit = 50, offset = 0 } = request;
 
-    console.log("📥 [SYNC] Pull request:", {
+    logger.info('📥 [SYNC] Pull request:', {
       userId,
       lastSyncTime,
       entityType,
@@ -60,7 +61,7 @@ export class SyncService {
 
     try {
       if (!userId) {
-        throw new Error("User ID is required");
+        throw new Error('User ID is required');
       }
 
       // Convert userId to ObjectId
@@ -82,30 +83,30 @@ export class SyncService {
         ];
       }
 
-      console.log("🔍 [SYNC] Query:", JSON.stringify(query));
+      logger.info('🔍 [SYNC] Query:', JSON.stringify(query));
 
       let entities: any[] = [];
       let totalCount = 0;
 
       // Fetch Expenses (or Outcomes)
-      if (!entityType || entityType === "expense" || entityType === "outcome") {
-        console.log("💰 [SYNC] Fetching expenses...");
+      if (!entityType || entityType === 'expense' || entityType === 'outcome') {
+        logger.info('💰 [SYNC] Fetching expenses...');
 
         const expenses = await Expense.find(query)
-          .populate("category", "title icon color type")
+          .populate('category', 'title icon color type')
           .sort({ _lastModified: -1, updatedAt: -1 })
           .limit(limit)
           .skip(offset)
           .lean()
           .exec();
 
-        console.log(`✅ [SYNC] Found ${expenses.length} expenses`);
+        logger.info(`✅ [SYNC] Found ${expenses.length} expenses`);
 
         entities = [
           ...entities,
           ...expenses.map((exp) => ({
             ...exp,
-            _entityType: "expense",
+            _entityType: 'expense',
             _lastModified: exp._lastModified || exp.updatedAt || exp.createdAt,
           })),
         ];
@@ -114,8 +115,8 @@ export class SyncService {
       }
 
       // Fetch Categories
-      if (!entityType || entityType === "category") {
-        console.log("📁 [SYNC] Fetching categories...");
+      if (!entityType || entityType === 'category') {
+        logger.info('📁 [SYNC] Fetching categories...');
 
         const categories = await Category.find(query)
           .sort({ _lastModified: -1, updatedAt: -1 })
@@ -124,13 +125,13 @@ export class SyncService {
           .lean()
           .exec();
 
-        console.log(`✅ [SYNC] Found ${categories.length} categories`);
+        logger.info(`✅ [SYNC] Found ${categories.length} categories`);
 
         entities = [
           ...entities,
           ...categories.map((cat) => ({
             ...cat,
-            _entityType: "category",
+            _entityType: 'category',
             _lastModified: cat._lastModified || cat.updatedAt || cat.createdAt,
           })),
         ];
@@ -139,9 +140,9 @@ export class SyncService {
       }
 
       // Fetch conflicts
-      console.log("⚠️ [SYNC] Fetching conflicts...");
+      logger.info('⚠️ [SYNC] Fetching conflicts...');
       const conflicts = await this.getConflicts(userId);
-      console.log(`✅ [SYNC] Found ${conflicts.length} conflicts`);
+      logger.info(`✅ [SYNC] Found ${conflicts.length} conflicts`);
 
       // Update sync metadata
       try {
@@ -151,9 +152,9 @@ export class SyncService {
           pendingCount: 0,
           conflictCount: conflicts.length,
         });
-        console.log("✅ [SYNC] Metadata updated");
+        logger.info('✅ [SYNC] Metadata updated');
       } catch (metadataError) {
-        console.warn("⚠️ [SYNC] Failed to update metadata:", metadataError);
+        logger.warn('⚠️ [SYNC] Failed to update metadata:', metadataError);
       }
 
       // Sort entities by modification date (newest first)
@@ -175,7 +176,7 @@ export class SyncService {
         totalCount,
       };
 
-      console.log("✅ [SYNC] Pull completed:", {
+      logger.info('✅ [SYNC] Pull completed:', {
         entitiesCount: entities.length,
         conflictsCount: conflicts.length,
         totalCount,
@@ -184,7 +185,7 @@ export class SyncService {
 
       return response;
     } catch (error: any) {
-      console.error("❌ [SYNC] Pull error:", error);
+      logger.error('❌ [SYNC] Pull error:', error);
       throw new Error(`Failed to pull sync data: ${error.message}`);
     }
   }
@@ -199,7 +200,7 @@ export class SyncService {
     userId: string,
     entities: any[]
   ): Promise<{ success: boolean; conflicts: any[]; processed: number }> {
-    console.log(
+    logger.info(
       `📤 [SYNC] Push request: ${entities.length} entities from user ${userId}`
     );
 
@@ -213,14 +214,14 @@ export class SyncService {
 
           if (result.conflict) {
             conflicts.push(result.entity);
-            console.log(
+            logger.info(
               `⚠️ [SYNC] Conflict detected for ${entity._entityType}:${entity._id}`
             );
           } else {
             processed++;
           }
         } catch (error: any) {
-          console.error(
+          logger.error(
             `❌ [SYNC] Error processing entity ${entity._id}:`,
             error
           );
@@ -228,7 +229,7 @@ export class SyncService {
         }
       }
 
-      console.log(
+      logger.info(
         `✅ [SYNC] Push completed: ${processed} processed, ${conflicts.length} conflicts`
       );
 
@@ -238,7 +239,7 @@ export class SyncService {
         processed,
       };
     } catch (error: any) {
-      console.error("❌ [SYNC] Push error:", error);
+      logger.error('❌ [SYNC] Push error:', error);
       throw new Error(`Failed to push sync data: ${error.message}`);
     }
   }
@@ -259,7 +260,7 @@ export class SyncService {
       ...entityData
     } = entity;
 
-    console.log(`🔄 [SYNC] Processing ${_entityType}:${_id}...`);
+    logger.info(`🔄 [SYNC] Processing ${_entityType}:${_id}...`);
 
     try {
       const userObjectId = new mongoose.Types.ObjectId(userId);
@@ -267,11 +268,11 @@ export class SyncService {
 
       // Determine model
       switch (_entityType) {
-        case "expense":
-        case "outcome":
+        case 'expense':
+        case 'outcome':
           Model = Expense;
           break;
-        case "category":
+        case 'category':
           Model = Category;
           break;
         default:
@@ -283,7 +284,7 @@ export class SyncService {
 
       // Check for conflicts
       if (existingEntity && this.hasConflict(existingEntity, entity)) {
-        console.log(`⚠️ [SYNC] Conflict for ${_entityType}:${_id}`);
+        logger.info(`⚠️ [SYNC] Conflict for ${_entityType}:${_id}`);
         return {
           conflict: true,
           entity: { ...entity, _conflictData: existingEntity.toObject() },
@@ -293,18 +294,18 @@ export class SyncService {
       // Process based on operation
       if (_isDeleted) {
         await this.handleDelete(Model, _id, userId);
-        console.log(`🗑️ [SYNC] Deleted ${_entityType}:${_id}`);
+        logger.info(`🗑️ [SYNC] Deleted ${_entityType}:${_id}`);
       } else if (existingEntity) {
         await this.handleUpdate(Model, _id, userId, entityData, _version || 1);
-        console.log(`✏️ [SYNC] Updated ${_entityType}:${_id}`);
+        logger.info(`✏️ [SYNC] Updated ${_entityType}:${_id}`);
       } else {
         await this.handleCreate(Model, entityData, userId, _id);
-        console.log(`🆕 [SYNC] Created ${_entityType}:${_id}`);
+        logger.info(`🆕 [SYNC] Created ${_entityType}:${_id}`);
       }
 
       return { conflict: false, entity };
     } catch (error: any) {
-      console.error(`❌ [SYNC] Error processing ${_entityType}:${_id}:`, error);
+      logger.error(`❌ [SYNC] Error processing ${_entityType}:${_id}:`, error);
       throw error;
     }
   }
@@ -338,7 +339,7 @@ export class SyncService {
     const entityData: any = {
       ...data,
       user: userObjectId,
-      _syncStatus: "synced",
+      _syncStatus: 'synced',
       _lastModified: new Date(),
       _version: 1,
     };
@@ -369,7 +370,7 @@ export class SyncService {
       {
         $set: {
           ...data,
-          _syncStatus: "synced",
+          _syncStatus: 'synced',
           _lastModified: new Date(),
           _version: version + 1,
         },
@@ -392,7 +393,7 @@ export class SyncService {
       {
         $set: {
           _isDeleted: true,
-          _syncStatus: "synced",
+          _syncStatus: 'synced',
           _lastModified: new Date(),
         },
       }
@@ -407,7 +408,7 @@ export class SyncService {
   ): Promise<boolean> {
     const { entityId, entityType, resolution, mergedData } = request;
 
-    console.log(
+    logger.info(
       `🔧 [SYNC] Resolving conflict for ${entityType}:${entityId} with strategy: ${resolution}`
     );
 
@@ -416,11 +417,11 @@ export class SyncService {
       let Model: any;
 
       switch (entityType) {
-        case "expense":
-        case "outcome":
+        case 'expense':
+        case 'outcome':
           Model = Expense;
           break;
-        case "category":
+        case 'category':
           Model = Category;
           break;
         default:
@@ -429,16 +430,16 @@ export class SyncService {
 
       const entity = await Model.findOne({ _id: entityId, user: userObjectId });
       if (!entity) {
-        throw new Error("Entity not found");
+        throw new Error('Entity not found');
       }
 
       let resolvedData: any;
 
-      if (resolution === "local") {
+      if (resolution === 'local') {
         resolvedData = entity.toObject();
-      } else if (resolution === "server") {
+      } else if (resolution === 'server') {
         resolvedData = entity._conflictData || entity.toObject();
-      } else if (resolution === "merge") {
+      } else if (resolution === 'merge') {
         resolvedData = mergedData || entity.toObject();
       }
 
@@ -448,7 +449,7 @@ export class SyncService {
         {
           $set: {
             ...resolvedData,
-            _syncStatus: "synced",
+            _syncStatus: 'synced',
             _lastModified: new Date(),
             _version: (entity._version || 0) + 1,
           },
@@ -467,10 +468,10 @@ export class SyncService {
         user: userObjectId,
       });
 
-      console.log(`✅ [SYNC] Conflict resolved for ${entityType}:${entityId}`);
+      logger.info(`✅ [SYNC] Conflict resolved for ${entityType}:${entityId}`);
       return true;
     } catch (error: any) {
-      console.error("❌ [SYNC] Conflict resolution error:", error);
+      logger.error('❌ [SYNC] Conflict resolution error:', error);
       throw new Error(`Failed to resolve conflict: ${error.message}`);
     }
   }
@@ -485,7 +486,7 @@ export class SyncService {
 
       return conflicts;
     } catch (error) {
-      console.error("❌ [SYNC] Get conflicts error:", error);
+      logger.error('❌ [SYNC] Get conflicts error:', error);
       return [];
     }
   }
@@ -512,7 +513,7 @@ export class SyncService {
 
       return metadata.toObject();
     } catch (error: any) {
-      console.error("❌ [SYNC] Get metadata error:", error);
+      logger.error('❌ [SYNC] Get metadata error:', error);
       throw new Error(`Failed to get sync metadata: ${error.message}`);
     }
   }
@@ -535,7 +536,7 @@ export class SyncService {
         { upsert: true }
       );
     } catch (error: any) {
-      console.error("❌ [SYNC] Update metadata error:", error);
+      logger.error('❌ [SYNC] Update metadata error:', error);
       throw new Error(`Failed to update sync metadata: ${error.message}`);
     }
   }
@@ -546,7 +547,7 @@ export class SyncService {
     userId: string,
     entities: any[]
   ): Promise<{ success: boolean; results: any[] }> {
-    console.log(`📦 [SYNC] Bulk sync: ${entities.length} entities`);
+    logger.info(`📦 [SYNC] Bulk sync: ${entities.length} entities`);
 
     const results: any[] = [];
 
@@ -570,7 +571,7 @@ export class SyncService {
 
       return { success: true, results };
     } catch (error: any) {
-      console.error("❌ [SYNC] Bulk sync error:", error);
+      logger.error('❌ [SYNC] Bulk sync error:', error);
       throw new Error(`Failed to perform bulk sync: ${error.message}`);
     }
   }
@@ -589,7 +590,7 @@ export class SyncService {
       await SyncOperation.deleteMany({
         user: userId,
         timestamp: { $lt: cutoffDate },
-        status: "synced",
+        status: 'synced',
       });
 
       // Clean up old conflict resolutions
@@ -598,9 +599,9 @@ export class SyncService {
         timestamp: { $lt: cutoffDate },
       });
 
-      console.log(`🧹 [SYNC] Cleaned up data older than ${olderThanDays} days`);
+      logger.info(`🧹 [SYNC] Cleaned up data older than ${olderThanDays} days`);
     } catch (error: any) {
-      console.error("❌ [SYNC] Cleanup error:", error);
+      logger.error('❌ [SYNC] Cleanup error:', error);
       throw new Error(`Failed to cleanup sync data: ${error.message}`);
     }
   }

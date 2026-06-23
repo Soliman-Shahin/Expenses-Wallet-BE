@@ -1,6 +1,6 @@
-import mongoose, { Connection } from "mongoose";
-import dotenv from "dotenv";
-import logger from "../utils/logger";
+import mongoose, { Connection } from 'mongoose';
+import dotenv from 'dotenv';
+import logger from '../utils/logger';
 
 // Initialize dotenv to use environment variables
 dotenv.config();
@@ -14,7 +14,7 @@ interface DbConfig {
 const loadConfig = (): DbConfig => {
   const uri = process.env.MONGO_URI;
   if (!uri) {
-    throw new Error("MONGO_URI must be defined in environment variables");
+    throw new Error('MONGO_URI must be defined in environment variables');
   }
   return { uri };
 };
@@ -42,11 +42,11 @@ class Database {
   public async connect(): Promise<void> {
     if (!this.connection || this.connection.readyState === 0) {
       try {
-        logger.info("[database]: Connecting to MongoDB...");
+        logger.info('[database]: Connecting to MongoDB...');
         await mongoose.connect(this.config.uri, {});
         this.connection = mongoose.connection;
-        this.connection.on("error", this.onError);
-        this.connection.on("open", this.onOpen);
+        this.connection.on('error', this.onError);
+        this.connection.on('open', this.onOpen);
       } catch (error) {
         this.handleError(error);
       }
@@ -54,19 +54,19 @@ class Database {
   }
 
   private onError = (error: any): void => {
-    logger.error("Error while attempting to connect to MongoDB:", error);
+    logger.error('Error while attempting to connect to MongoDB:', error);
     process.exit(1);
   };
 
   // Error handler for database connection
   private handleError = (error: any): void => {
-    logger.error("Error connecting to MongoDB:", error);
+    logger.error('Error connecting to MongoDB:', error);
     process.exit(1);
   };
 
   // Success handler for database connection
   private onOpen = (): void => {
-    logger.info("[database]: Connected to MongoDB successfully!");
+    logger.info('[database]: Connected to MongoDB successfully!');
   };
 }
 

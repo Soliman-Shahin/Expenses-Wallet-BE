@@ -1,5 +1,6 @@
-import { Request, Response, NextFunction } from "express";
-import { sendError } from "../shared/helper";
+import logger from '../services/logger.service';
+import { Request, Response, NextFunction } from 'express';
+import { sendError } from '../shared/helper';
 
 /**
  * Brute Force Protection Middleware
@@ -72,7 +73,7 @@ class BruteForceProtection {
   }
 
   private getIp(req: Request): string {
-    return req.ip || req.socket.remoteAddress || "unknown";
+    return req.ip || req.socket.remoteAddress || 'unknown';
   }
 
   private getAttempt(
@@ -122,8 +123,8 @@ class BruteForceProtection {
           res,
           `Too many failed attempts. Account locked. Try again in ${remainingTime} seconds`,
           429,
-          "ACCOUNT_LOCKED",
-          { remainingTime, type: "ip" }
+          'ACCOUNT_LOCKED',
+          { remainingTime, type: 'ip' }
         );
       }
 
@@ -138,8 +139,8 @@ class BruteForceProtection {
             res,
             `Too many failed login attempts for this account. Try again in ${remainingTime} seconds`,
             429,
-            "ACCOUNT_LOCKED",
-            { remainingTime, type: "email" }
+            'ACCOUNT_LOCKED',
+            { remainingTime, type: 'email' }
           );
         }
 
@@ -169,7 +170,7 @@ class BruteForceProtection {
 
     if (ipAttempt.count >= this.config.maxFailedAttempts) {
       ipAttempt.lockedUntil = now + this.config.lockoutDurationMs;
-      console.warn(
+      logger.warn(
         `🔒 IP ${ip} locked due to ${ipAttempt.count} failed attempts`
       );
     }
@@ -183,7 +184,7 @@ class BruteForceProtection {
 
       if (emailAttempt.count >= this.config.maxFailedAttempts) {
         emailAttempt.lockedUntil = now + this.config.lockoutDurationMs;
-        console.warn(
+        logger.warn(
           `🔒 Email ${emailNormalized} locked due to ${emailAttempt.count} failed attempts`
         );
       }

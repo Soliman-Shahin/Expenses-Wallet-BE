@@ -11,7 +11,10 @@ export const verifySession = async (
   try {
     const refreshToken = req.header('refresh-token')!;
     const _id = req.header('_id')!;
-    const user: UserDocument | null = await User.findByIdAndToken(_id, refreshToken);
+    const user: UserDocument | null = await User.findByIdAndToken(
+      _id,
+      refreshToken
+    );
 
     if (!user) {
       throw new Error(
@@ -25,7 +28,8 @@ export const verifySession = async (
 
     const isSessionValid = user.sessions.some(
       (session: any) =>
-        session.token === refreshToken && !User.hasRefreshTokenExpired(session.expiresAt)
+        session.token === refreshToken &&
+        !User.hasRefreshTokenExpired(session.expiresAt)
     );
 
     if (isSessionValid) {

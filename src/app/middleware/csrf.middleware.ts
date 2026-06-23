@@ -3,10 +3,10 @@ import csrf from 'csurf';
 
 /**
  * CSRF Protection Middleware
- * 
+ *
  * Protects against Cross-Site Request Forgery attacks for session-based routes.
  * API routes using Bearer tokens are exempt as they have built-in CSRF protection.
- * 
+ *
  * IMPORTANT: This middleware should NOT be applied to:
  * - OAuth callback routes (/auth/google/callback, /auth/facebook/callback)
  * - API routes using JWT Bearer tokens
@@ -14,12 +14,12 @@ import csrf from 'csurf';
  */
 
 // Create CSRF protection middleware
-const csrfProtection = csrf({ 
+const csrfProtection = csrf({
   cookie: {
     httpOnly: true,
     sameSite: 'strict',
     secure: process.env.NODE_ENV === 'production',
-  }
+  },
 });
 
 /**
@@ -47,7 +47,7 @@ export const conditionalCsrfProtection = (
     '/api-docs',
   ];
 
-  if (exemptPaths.some(path => req.path.includes(path))) {
+  if (exemptPaths.some((path) => req.path.includes(path))) {
     return next();
   }
 
@@ -65,8 +65,8 @@ export const conditionalCsrfProtection = (
  * Provides CSRF token to clients that need it
  */
 export const getCsrfToken = (req: Request, res: Response) => {
-  res.json({ 
-    csrfToken: (req as any).csrfToken?.() || null 
+  res.json({
+    csrfToken: (req as any).csrfToken?.() || null,
   });
 };
 

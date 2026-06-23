@@ -1,7 +1,7 @@
-import { NextFunction, Request, Response } from "express";
-import { sendError } from "../shared/helper";
-import { AppError, toAppError } from "../shared/errors";
-import logger from "../services/logger.service";
+import { NextFunction, Request, Response } from 'express';
+import { sendError } from '../shared/helper';
+import { AppError, toAppError } from '../shared/errors';
+import logger from '../services/logger.service';
 
 /**
  * Enhanced Error Handler Middleware
@@ -52,7 +52,7 @@ export const enhancedErrorHandler = (
   }
 
   // Prepare response
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = process.env.NODE_ENV === 'production';
 
   // For operational errors, send detailed message
   if (appError.isOperational) {
@@ -67,7 +67,7 @@ export const enhancedErrorHandler = (
 
   // For non-operational errors, send generic message in production
   const message = isProduction
-    ? "An unexpected error occurred. Please try again later."
+    ? 'An unexpected error occurred. Please try again later.'
     : appError.message;
 
   const details = isProduction
@@ -107,16 +107,16 @@ export const notFoundHandler = (
   };
   logger.warn(message, context);
 
-  return sendError(res, message, 404, "ROUTE_NOT_FOUND");
+  return sendError(res, message, 404, 'ROUTE_NOT_FOUND');
 };
 
 /**
  * Handle unhandled promise rejections
  */
 export const handleUnhandledRejection = () => {
-  process.on("unhandledRejection", (reason: any, promise: Promise<any>) => {
+  process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
     logger.fatal(
-      "Unhandled Promise Rejection",
+      'Unhandled Promise Rejection',
       reason,
       {},
       {
@@ -126,8 +126,8 @@ export const handleUnhandledRejection = () => {
     );
 
     // In production, you might want to restart the process
-    if (process.env.NODE_ENV === "production") {
-      console.error("💀 Unhandled rejection. Shutting down gracefully...");
+    if (process.env.NODE_ENV === 'production') {
+      logger.error('💀 Unhandled rejection. Shutting down gracefully...');
       process.exit(1);
     }
   });
@@ -137,10 +137,10 @@ export const handleUnhandledRejection = () => {
  * Handle uncaught exceptions
  */
 export const handleUncaughtException = () => {
-  process.on("uncaughtException", (error: Error) => {
-    logger.fatal("Uncaught Exception", error);
+  process.on('uncaughtException', (error: Error) => {
+    logger.fatal('Uncaught Exception', error);
 
-    console.error("💀 Uncaught exception. Shutting down...");
+    logger.error('💀 Uncaught exception. Shutting down...');
     process.exit(1);
   });
 };

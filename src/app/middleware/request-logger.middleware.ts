@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from "express";
-import logger from "../services/logger.service";
+import { Request, Response, NextFunction } from 'express';
+import logger from '../services/logger.service';
 
 /**
  * Request Logger Middleware
@@ -35,7 +35,7 @@ export const requestLogger = (
   // Generate unique request ID
   const requestId = Math.random().toString(36).substr(2, 9);
   (req as any).id = requestId;
-  res.setHeader("X-Request-ID", requestId);
+  res.setHeader('X-Request-ID', requestId);
 
   // Log request start
   const context = {
@@ -44,7 +44,7 @@ export const requestLogger = (
     ip: req.ip || req.socket.remoteAddress,
     method: req.method,
     path: req.path,
-    userAgent: req.get("user-agent"),
+    userAgent: req.get('user-agent'),
   };
   logger.debug(`→ Incoming ${req.method} ${req.path}`, context);
 
@@ -66,19 +66,19 @@ export const requestLogger = (
       statusCode: res.statusCode,
       duration,
       ip: req.ip || req.socket.remoteAddress,
-      userAgent: req.get("user-agent"),
+      userAgent: req.get('user-agent'),
       userId,
     };
 
     // Log based on status code
     const level =
-      res.statusCode >= 500 ? "error" : res.statusCode >= 400 ? "warn" : "info";
+      res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
 
     const message = `← ${req.method} ${req.path} ${res.statusCode} ${duration}ms`;
 
-    if (level === "error") {
+    if (level === 'error') {
       logger.error(message, undefined, context, logData);
-    } else if (level === "warn") {
+    } else if (level === 'warn') {
       logger.warn(message, context, logData);
     } else {
       logger.info(message, context, logData);
@@ -86,9 +86,9 @@ export const requestLogger = (
 
     // Call original end function
     if (chunk) {
-      return originalEnd.call(this, chunk, encoding || "utf8", callback);
+      return originalEnd.call(this, chunk, encoding || 'utf8', callback);
     }
-    return originalEnd.call(this, null, "utf8", callback);
+    return originalEnd.call(this, null, 'utf8', callback);
   };
 
   next();
@@ -102,7 +102,7 @@ export const performanceMonitor = (thresholdMs: number = 1000) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const startTime = Date.now();
 
-    res.on("finish", () => {
+    res.on('finish', () => {
       const duration = Date.now() - startTime;
 
       if (duration > thresholdMs) {
@@ -129,7 +129,7 @@ export const performanceMonitor = (thresholdMs: number = 1000) => {
  */
 export const requestSizeMonitor = (thresholdBytes: number = 1024 * 100) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const size = parseInt(req.get("content-length") || "0", 10);
+    const size = parseInt(req.get('content-length') || '0', 10);
 
     if (size > thresholdBytes) {
       const context = {
@@ -158,7 +158,7 @@ export const responseSizeMonitor = (thresholdBytes: number = 1024 * 100) => {
 
     res.json = function (body: any): Response {
       const bodyString = JSON.stringify(body);
-      const size = Buffer.byteLength(bodyString, "utf8");
+      const size = Buffer.byteLength(bodyString, 'utf8');
 
       if (size > thresholdBytes) {
         const context = {
