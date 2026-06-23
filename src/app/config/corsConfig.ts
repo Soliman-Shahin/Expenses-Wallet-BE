@@ -64,6 +64,8 @@ export const corsOptions = {
     'refresh-token',
     '_id',
     'X-Requested-With',
+    'X-Skip-Retry',
+    'X-Silent-Error',
   ],
   exposedHeaders: ['access-token', 'refresh-token', '_id'],
   credentials: true,

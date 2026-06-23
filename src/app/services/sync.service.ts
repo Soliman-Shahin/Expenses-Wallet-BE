@@ -206,11 +206,12 @@ export class SyncService {
 
     const conflicts: any[] = [];
     let processed = 0;
+    const idMap = new Map<string, string>();
 
     try {
       for (const entity of entities) {
         try {
-          const result = await this.processEntity(userId, entity);
+          const result = await this.processEntity(userId, entity, idMap);
 
           if (result.conflict) {
             conflicts.push(result.entity);
@@ -249,7 +250,8 @@ export class SyncService {
    */
   private async processEntity(
     userId: string,
-    entity: any
+    entity: any,
+    idMap: Map<string, string>
   ): Promise<{ conflict: boolean; entity: any }> {
     const {
       _entityType,
@@ -263,6 +265,17 @@ export class SyncService {
     logger.info(`🔄 [SYNC] Processing ${_entityType}:${_id}...`);
 
     try {
+      // Map offline IDs to new MongoDB IDs if they were created in this batch
+      if (
+        entityData.category &&
+        typeof entityData.category === 'string' &&
+        entityData.category.startsWith('offline_')
+      ) {
+        if (idMap.has(entityData.category)) {
+          entityData.category = idMap.get(entityData.category);
+        }
+      }
+
       const userObjectId = new mongoose.Types.ObjectId(userId);
       let Model: any;
 
@@ -299,7 +312,7 @@ export class SyncService {
         await this.handleUpdate(Model, _id, userId, entityData, _version || 1);
         logger.info(`✏️ [SYNC] Updated ${_entityType}:${_id}`);
       } else {
-        await this.handleCreate(Model, entityData, userId, _id);
+        await this.handleCreate(Model, entityData, userId, _id, idMap);
         logger.info(`🆕 [SYNC] Created ${_entityType}:${_id}`);
       }
 
@@ -332,7 +345,8 @@ export class SyncService {
     Model: any,
     data: any,
     userId: string,
-    entityId?: string
+    entityId: string | undefined,
+    idMap: Map<string, string>
   ): Promise<void> {
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
@@ -344,13 +358,22 @@ export class SyncService {
       _version: 1,
     };
 
-    // Use provided ID if available
+    // Use provided ID if available and valid
     if (entityId) {
-      entityData._id = entityId;
+      if (mongoose.Types.ObjectId.isValid(entityId)) {
+        entityData._id = entityId;
+      } else {
+        // It's an offline ID, map it to _clientId so frontend can track it
+        entityData._clientId = entityId;
+      }
     }
 
     const entity = new Model(entityData);
     await entity.save();
+
+    if (entityId && entityId.startsWith('offline_')) {
+      idMap.set(entityId, entity._id.toString());
+    }
   }
 
   /**
@@ -552,9 +575,10 @@ export class SyncService {
     const results: any[] = [];
 
     try {
+      const idMap = new Map<string, string>();
       for (const entity of entities) {
         try {
-          const result = await this.processEntity(userId, entity);
+          const result = await this.processEntity(userId, entity, idMap);
           results.push({
             success: true,
             entity: result.entity,

@@ -10,6 +10,7 @@ import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.config';
 import { conditionalCsrfProtection } from './middleware/csrf.middleware';
 import routes from './routes';
+import healthRoutes from './routes/health.route';
 import { errorHandler } from './middleware/error-handler';
 import {
   trackSyncOperation,
@@ -110,6 +111,10 @@ function configureExpressApp(): express.Application {
 
   // CSRF Protection (conditional - skips Bearer token routes and OAuth)
   app.use(conditionalCsrfProtection);
+
+  // Add health routes outside of /v1 and inside /v1 just in case
+  app.use('/health', healthRoutes);
+  app.use('/v1/health', healthRoutes);
 
   app.use('/v1', routes);
   app.use(handleSyncError);
