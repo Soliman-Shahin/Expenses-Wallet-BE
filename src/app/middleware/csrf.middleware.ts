@@ -44,6 +44,13 @@ export const conditionalCsrfProtection = (
     '/v1/user/auth/google/native',
     '/v1/user/google',
     '/v1/user/facebook',
+    '/v1/user/login',
+    '/v1/user/register',
+    '/v1/user/verify-otp',
+    '/v1/user/resend-otp',
+    '/v1/user/forgot-password',
+    '/v1/user/reset-password',
+    '/v1/user/refresh-token',
     '/api-docs',
   ];
 
