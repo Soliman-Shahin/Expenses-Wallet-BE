@@ -1,5 +1,5 @@
 import NodeCache from 'node-cache';
-import logger from '../utils/logger';
+import logger from './logger.service';
 
 /**
  * Cache Service
@@ -67,7 +67,7 @@ class CacheService {
       }
       return value;
     } catch (error) {
-      logger.error('[Cache] Get error:', error);
+      logger.error('[Cache] Get error:', error as Error);
       return undefined;
     }
   }
@@ -85,7 +85,7 @@ class CacheService {
       }
       return success;
     } catch (error) {
-      logger.error('[Cache] Set error:', error);
+      logger.error('[Cache] Set error:', error as Error);
       return false;
     }
   }
@@ -101,7 +101,25 @@ class CacheService {
       logger.debug(`[Cache] DEL: ${key} (deleted: ${deleted})`);
       return deleted;
     } catch (error) {
-      logger.error('[Cache] Delete error:', error);
+      logger.error('[Cache] Delete error:', error as Error);
+      return 0;
+    }
+  }
+
+  /**
+   * Delete values from cache by prefix
+   */
+  delByPrefix(prefix: string): number {
+    if (!this.enabled) return 0;
+
+    try {
+      const keys = this.cache.keys();
+      const keysToDelete = keys.filter((k) => k.startsWith(prefix));
+      const deleted = this.cache.del(keysToDelete);
+      logger.debug(`[Cache] DEL prefix: ${prefix} (deleted: ${deleted})`);
+      return deleted;
+    } catch (error) {
+      logger.error('[Cache] Delete prefix error:', error as Error);
       return 0;
     }
   }
@@ -116,7 +134,7 @@ class CacheService {
       this.cache.flushAll();
       logger.info('[Cache] Flushed all cache');
     } catch (error) {
-      logger.error('[Cache] Flush error:', error);
+      logger.error('[Cache] Flush error:', error as Error);
     }
   }
 

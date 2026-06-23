@@ -1,7 +1,12 @@
 import { Category } from '../models/category.model';
 import { Types } from 'mongoose';
+import { cacheService } from './cache.service';
 
 export class CategoryService {
+  private static clearUserCategoryCache(userId: string) {
+    cacheService.delByPrefix(`categories:${userId}`);
+  }
+
   static async createCategory(data: any, userId: string) {
     const category = new Category({
       ...data,
@@ -11,10 +16,16 @@ export class CategoryService {
       _version: 1,
       _isDeleted: false,
     });
-    return category.save();
+    const result = await category.save();
+    this.clearUserCategoryCache(userId);
+    return result;
   }
 
   static async getCategories(query: any, userId: string) {
+    const cacheKey = `categories:${userId}:query:${JSON.stringify(query)}`;
+    const cached = cacheService.get<{ data: any[]; total: number }>(cacheKey);
+    if (cached) return cached;
+
     const { q, type, page = 1, limit = 10, sort = 'order' } = query;
     const filter: Record<string, any> = {
       user: userId,
@@ -33,15 +44,27 @@ export class CategoryService {
       .skip((page - 1) * limit)
       .limit(Number(limit));
     const total = await Category.countDocuments(filter);
-    return { data, total };
+    
+    const result = { data, total };
+    cacheService.set(cacheKey, result, 300); // Cache for 5 minutes
+    return result;
   }
 
   static async getCategoryById(id: string, userId: string) {
-    return Category.findOne({
+    const cacheKey = `categories:${userId}:id:${id}`;
+    const cached = cacheService.get<any>(cacheKey);
+    if (cached) return cached;
+
+    const category = await Category.findOne({
       _id: id,
       user: userId,
       _isDeleted: { $ne: true },
     }).populate('user', 'name');
+
+    if (category) {
+      cacheService.set(cacheKey, category, 300);
+    }
+    return category;
   }
 
   static async updateCategory(id: string, data: any, userId: string) {
@@ -50,7 +73,7 @@ export class CategoryService {
 
     const currentVersion = category._version || 0;
 
-    return Category.findOneAndUpdate(
+    const updated = await Category.findOneAndUpdate(
       { _id: id, user: userId },
       {
         ...data,
@@ -61,6 +84,8 @@ export class CategoryService {
       },
       { new: true }
     );
+    this.clearUserCategoryCache(userId);
+    return updated;
   }
 
   static async deleteCategory(id: string, userId: string) {
@@ -75,7 +100,7 @@ export class CategoryService {
     }
 
     // Soft delete for sync purposes
-    return Category.findOneAndUpdate(
+    const deleted = await Category.findOneAndUpdate(
       { _id: id, user: userId },
       {
         _isDeleted: true,
@@ -84,6 +109,8 @@ export class CategoryService {
       },
       { new: true }
     );
+    this.clearUserCategoryCache(userId);
+    return deleted;
   }
 
   static async updateOrder(
@@ -106,6 +133,8 @@ export class CategoryService {
         } as any,
       },
     }));
-    return Category.bulkWrite(bulkOps as any);
+    const result = await Category.bulkWrite(bulkOps as any);
+    this.clearUserCategoryCache(userId);
+    return result;
   }
 }
