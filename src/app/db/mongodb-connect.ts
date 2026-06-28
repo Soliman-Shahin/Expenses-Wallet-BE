@@ -55,7 +55,7 @@ class Database {
 
   private onError = (error: any): void => {
     logger.error('Error while attempting to connect to MongoDB:', error);
-    process.exit(1);
+    // Do NOT exit process. Let Mongoose auto-reconnect handle it.
   };
 
   // Error handler for database connection

@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 import { cacheService } from './cache.service';
 
 export class CategoryService {
-  private static clearUserCategoryCache(userId: string) {
+  static clearUserCategoryCache(userId: string) {
     cacheService.delByPrefix(`categories:${userId}`);
   }
 

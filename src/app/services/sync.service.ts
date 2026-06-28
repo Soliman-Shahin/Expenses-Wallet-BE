@@ -8,6 +8,7 @@ import {
   SyncMetadata,
 } from '../models/sync.model';
 import mongoose from 'mongoose';
+import { CategoryService } from './category.service';
 
 export interface SyncRequest {
   lastSyncTime?: Date;
@@ -293,7 +294,18 @@ export class SyncService {
       }
 
       // Find existing entity
-      const existingEntity = await Model.findOne({ _id, user: userObjectId });
+      let existingEntity = null;
+      let targetId = _id;
+      
+      if (mongoose.Types.ObjectId.isValid(_id)) {
+        existingEntity = await Model.findOne({ _id, user: userObjectId });
+      } else if (_id && typeof _id === 'string' && _id.startsWith('offline_')) {
+        // It's an offline ID, search by _clientId
+        existingEntity = await Model.findOne({ _clientId: _id, user: userObjectId });
+        if (existingEntity) {
+          targetId = existingEntity._id.toString();
+        }
+      }
 
       // Check for conflicts
       if (existingEntity && this.hasConflict(existingEntity, entity)) {
@@ -306,14 +318,19 @@ export class SyncService {
 
       // Process based on operation
       if (_isDeleted) {
-        await this.handleDelete(Model, _id, userId);
-        logger.info(`🗑️ [SYNC] Deleted ${_entityType}:${_id}`);
+        await this.handleDelete(Model, targetId, userId);
+        logger.info(`🗑️ [SYNC] Deleted ${_entityType}:${targetId}`);
       } else if (existingEntity) {
-        await this.handleUpdate(Model, _id, userId, entityData, _version || 1);
-        logger.info(`✏️ [SYNC] Updated ${_entityType}:${_id}`);
+        await this.handleUpdate(Model, targetId, userId, entityData, _version || 1);
+        logger.info(`✏️ [SYNC] Updated ${_entityType}:${targetId}`);
       } else {
-        await this.handleCreate(Model, entityData, userId, _id, idMap);
-        logger.info(`🆕 [SYNC] Created ${_entityType}:${_id}`);
+        await this.handleCreate(Model, entityData, userId, targetId, idMap);
+        logger.info(`🆕 [SYNC] Created ${_entityType}:${targetId}`);
+      }
+
+      // Clear cache if entity type is category
+      if (_entityType === 'category') {
+        CategoryService.clearUserCategoryCache(userId);
       }
 
       return { conflict: false, entity };
