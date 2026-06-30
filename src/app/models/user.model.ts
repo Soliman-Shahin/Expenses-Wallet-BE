@@ -5,6 +5,11 @@ import crypto from 'crypto';
 import { config } from 'dotenv';
 config();
 
+export enum UserRole {
+  User = 'user',
+  Admin = 'admin',
+}
+
 enum SignupType {
   Normal = 'normal',
   Facebook = 'facebook',
@@ -44,6 +49,7 @@ interface UserDocument extends Document {
   salary?: Array<{ label: string; amount: number }>;
   currency?: string;
   emailVerified?: boolean;
+  role: UserRole;
   sessions: IUserSession[];
   createSession(): Promise<string>;
   generateAccessAuthToken(): Promise<string>;
@@ -95,6 +101,11 @@ const UserSchema = new Schema<UserDocument>(
     ],
     currency: String,
     emailVerified: Boolean,
+    role: {
+      type: String,
+      enum: Object.values(UserRole),
+      default: UserRole.User,
+    },
     sessions: [
       {
         token: { type: String, required: true },

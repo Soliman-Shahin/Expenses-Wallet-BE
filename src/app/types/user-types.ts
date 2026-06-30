@@ -3,6 +3,7 @@
  */
 
 import { Request } from 'express';
+import { UserRole } from '../models/user.model';
 
 /**
  * User credentials for login/signup
@@ -38,6 +39,7 @@ export interface UserResponse {
   image?: string;
   signupType: 'normal' | 'google' | 'facebook';
   emailVerified?: boolean;
+  role: UserRole;
   createdAt?: Date;
   updatedAt?: Date;
 }
