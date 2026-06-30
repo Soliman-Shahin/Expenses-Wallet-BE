@@ -19,13 +19,22 @@ router.get(
   '/expenses/:id',
   adminController.getExpenseById.bind(adminController)
 );
+router.delete(
+  '/expenses/:id',
+  adminController.deleteExpense.bind(adminController)
+);
 
 // ==================== USERS ====================
 router.get('/users', adminController.getUsers.bind(adminController));
 router.get('/users/:id', adminController.getUserById.bind(adminController));
 router.put('/users/:id', adminController.updateUser.bind(adminController));
+router.delete('/users/:id', adminController.deleteUser.bind(adminController));
 // ==================== CATEGORIES ====================
 router.get('/categories', adminController.getCategories.bind(adminController));
+router.post(
+  '/categories',
+  adminController.createCategory.bind(adminController)
+);
 router.get(
   '/categories/:id',
   adminController.getCategoryById.bind(adminController)
@@ -33,6 +42,10 @@ router.get(
 router.put(
   '/categories/:id',
   adminController.updateCategory.bind(adminController)
+);
+router.delete(
+  '/categories/:id',
+  adminController.deleteCategory.bind(adminController)
 );
 
 // ==================== SYNC ====================

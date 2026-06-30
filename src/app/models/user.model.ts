@@ -51,6 +51,7 @@ interface UserDocument extends Document {
   emailVerified?: boolean;
   role: UserRole;
   sessions: IUserSession[];
+  _isDeleted?: boolean;
   createSession(): Promise<string>;
   generateAccessAuthToken(): Promise<string>;
   createRefreshToken(): Promise<string>;
@@ -100,7 +101,7 @@ const UserSchema = new Schema<UserDocument>(
       ),
     ],
     currency: String,
-    emailVerified: Boolean,
+    emailVerified: { type: Boolean, default: false },
     role: {
       type: String,
       enum: Object.values(UserRole),
@@ -112,6 +113,7 @@ const UserSchema = new Schema<UserDocument>(
         expiresAt: { type: Number, required: true },
       },
     ],
+    _isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

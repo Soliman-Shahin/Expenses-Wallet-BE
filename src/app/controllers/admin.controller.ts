@@ -40,8 +40,9 @@ export class AdminController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const search = req.query.search as string;
+      const status = (req.query.status as string) || 'active';
 
-      const result = await adminService.getUsers(page, limit, search);
+      const result = await adminService.getUsers(page, limit, search, status);
       sendSuccess(res, result, 'Users retrieved successfully');
     } catch (error) {
       next(error);
@@ -75,8 +76,28 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const user = await adminService.updateUser(req.params.id as string, req.body);
+      const user = await adminService.updateUser(
+        req.params.id as string,
+        req.body
+      );
       sendSuccess(res, user, 'User updated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Delete a user
+   * DELETE /v1/admin/users/:id
+   */
+  async deleteUser(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const user = await adminService.deleteUser(req.params.id as string);
+      sendSuccess(res, user, 'User deleted successfully');
     } catch (error) {
       next(error);
     }
@@ -94,8 +115,14 @@ export class AdminController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const search = req.query.search as string;
+      const status = (req.query.status as string) || 'active';
 
-      const result = await adminService.getCategories(page, limit, search);
+      const result = await adminService.getCategories(
+        page,
+        limit,
+        search,
+        status
+      );
       sendSuccess(res, result, 'Categories retrieved successfully');
     } catch (error) {
       next(error);
@@ -112,7 +139,9 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const category = await adminService.getCategoryById(req.params.id as string);
+      const category = await adminService.getCategoryById(
+        req.params.id as string
+      );
       sendSuccess(res, category, 'Category retrieved successfully');
     } catch (error) {
       next(error);
@@ -138,6 +167,42 @@ export class AdminController {
       next(error);
     }
   }
+
+  /**
+   * Create a system category
+   * POST /v1/admin/categories
+   */
+  async createCategory(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const category = await adminService.createCategory(req.body);
+      sendSuccess(res, category, 'System category created successfully', 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Delete a category
+   * DELETE /v1/admin/categories/:id
+   */
+  async deleteCategory(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const category = await adminService.deleteCategory(
+        req.params.id as string
+      );
+      sendSuccess(res, category, 'Category deleted successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
   /**
    * Get all expenses
    * GET /v1/admin/expenses
@@ -151,8 +216,14 @@ export class AdminController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 10;
       const search = req.query.search as string;
+      const status = (req.query.status as string) || 'active';
 
-      const result = await adminService.getExpenses(page, limit, search);
+      const result = await adminService.getExpenses(
+        page,
+        limit,
+        search,
+        status
+      );
       sendSuccess(res, result, 'Expenses retrieved successfully');
     } catch (error) {
       next(error);
@@ -169,8 +240,27 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const expense = await adminService.getExpenseById(req.params.id as string);
+      const expense = await adminService.getExpenseById(
+        req.params.id as string
+      );
       sendSuccess(res, expense, 'Expense retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Delete an expense
+   * DELETE /v1/admin/expenses/:id
+   */
+  async deleteExpense(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const expense = await adminService.deleteExpense(req.params.id as string);
+      sendSuccess(res, expense, 'Expense deleted successfully');
     } catch (error) {
       next(error);
     }

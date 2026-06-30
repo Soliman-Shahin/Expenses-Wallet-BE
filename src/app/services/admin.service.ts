@@ -1,4 +1,4 @@
-import { User } from '../models/user.model';
+import { User, UserRole } from '../models/user.model';
 import { Expense } from '../models/expense.model';
 import { Category } from '../models/category.model';
 import logger from './logger.service';
@@ -42,11 +42,20 @@ export class AdminService {
   }
 
   /**
-   * List all users with pagination and search
+   * List all users with pagination, search, and status filter
    */
-  async getUsers(page: number = 1, limit: number = 10, search?: string) {
+  async getUsers(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    status: string = 'active'
+  ) {
     try {
       const query: any = {};
+
+      if (status === 'active') query._isDeleted = { $ne: true };
+      if (status === 'deleted') query._isDeleted = true;
+
       if (search) {
         query.$or = [
           { email: { $regex: search, $options: 'i' } },
@@ -124,11 +133,45 @@ export class AdminService {
   }
 
   /**
-   * List all categories with pagination and search
+   * Delete user (soft delete)
    */
-  async getCategories(page: number = 1, limit: number = 10, search?: string) {
+  async deleteUser(userId: string) {
+    try {
+      const user = await User.findById(userId);
+      if (!user) throw new Error('User not found');
+
+      user._isDeleted = true;
+      await user.save();
+
+      // Also soft delete their expenses and categories
+      await Expense.updateMany({ user: user._id }, { _isDeleted: true });
+      await Category.updateMany(
+        { user: user._id, isDefault: false },
+        { _isDeleted: true }
+      );
+
+      return user;
+    } catch (error) {
+      logger.error('Error soft deleting user:', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * List all categories with pagination, search, and status filter
+   */
+  async getCategories(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    status: string = 'active'
+  ) {
     try {
       const query: any = {};
+
+      if (status === 'active') query._isDeleted = { $ne: true };
+      if (status === 'deleted') query._isDeleted = true;
+
       if (search) {
         query.$or = [{ name: { $regex: search, $options: 'i' } }];
       }
@@ -213,12 +256,74 @@ export class AdminService {
       throw error;
     }
   }
+
+  /**
+   * Delete category (soft delete)
+   */
+  async deleteCategory(categoryId: string) {
+    try {
+      const category = await Category.findById(categoryId);
+      if (!category) throw new Error('Category not found');
+
+      if (category.isDefault) {
+        throw new Error('Cannot delete a system default category');
+      }
+
+      category._isDeleted = true;
+      await category.save();
+
+      // We should probably also soft-delete related expenses, or keep them but hide the category
+      // For now we will soft-delete the associated expenses
+      await Expense.updateMany(
+        { category: category._id },
+        { _isDeleted: true }
+      );
+
+      return category;
+    } catch (error) {
+      logger.error('Error soft deleting category:', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a system default category
+   */
+  async createCategory(categoryData: Partial<typeof Category>) {
+    try {
+      // Find the admin user to assign as owner, or we can use a system placeholder if not required
+      const adminUser = await User.findOne({ role: UserRole.Admin });
+      if (!adminUser)
+        throw new Error('No admin user found to assign the category to');
+
+      const category = new Category({
+        ...categoryData,
+        user: adminUser._id,
+        isDefault: true,
+      });
+      await category.save();
+      return category;
+    } catch (error) {
+      logger.error('Error creating category:', error as Error);
+      throw error;
+    }
+  }
+
   /**
    * List all expenses with pagination and search/filters
    */
-  async getExpenses(page: number = 1, limit: number = 10, search?: string) {
+  async getExpenses(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+    status: string = 'active'
+  ) {
     try {
       const query: any = {};
+
+      if (status === 'active') query._isDeleted = { $ne: true };
+      if (status === 'deleted') query._isDeleted = true;
+
       if (search) {
         query.$or = [{ description: { $regex: search, $options: 'i' } }];
       }
@@ -268,6 +373,25 @@ export class AdminService {
       throw error;
     }
   }
+
+  /**
+   * Delete expense (soft delete)
+   */
+  async deleteExpense(expenseId: string) {
+    try {
+      const expense = await Expense.findById(expenseId);
+      if (!expense) throw new Error('Expense not found');
+
+      expense._isDeleted = true;
+      await expense.save();
+
+      return expense;
+    } catch (error) {
+      logger.error('Error soft deleting expense:', error as Error);
+      throw error;
+    }
+  }
+
   /**
    * Get system health metrics
    */
