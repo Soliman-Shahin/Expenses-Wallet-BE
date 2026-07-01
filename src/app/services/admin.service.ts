@@ -25,7 +25,7 @@ export class AdminService {
           Expense.find()
             .sort({ date: -1 })
             .limit(5)
-            .populate('user', 'email username')
+            .populate('user', 'email username currency')
             .lean(),
         ]);
 
@@ -48,7 +48,9 @@ export class AdminService {
     page: number = 1,
     limit: number = 10,
     search?: string,
-    status: string = 'active'
+    status: string = 'active',
+    sortField: string = 'createdAt',
+    sortOrder: number = -1
   ) {
     try {
       const query: any = {};
@@ -67,7 +69,11 @@ export class AdminService {
       const skip = (page - 1) * limit;
 
       const [users, total] = await Promise.all([
-        User.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+        User.find(query)
+          .sort({ [sortField]: sortOrder as 1 | -1 })
+          .skip(skip)
+          .limit(limit)
+          .lean(),
         User.countDocuments(query),
       ]);
 
@@ -164,7 +170,9 @@ export class AdminService {
     page: number = 1,
     limit: number = 10,
     search?: string,
-    status: string = 'active'
+    status: string = 'active',
+    sortField: string = 'createdAt',
+    sortOrder: number = -1
   ) {
     try {
       const query: any = {};
@@ -180,7 +188,7 @@ export class AdminService {
 
       const [categories, total] = await Promise.all([
         Category.find(query)
-          .sort({ isDefault: -1, createdAt: -1 })
+          .sort({ isDefault: -1, [sortField]: sortOrder as 1 | -1 })
           .skip(skip)
           .limit(limit)
           .populate('user', 'email username')
@@ -316,7 +324,9 @@ export class AdminService {
     page: number = 1,
     limit: number = 10,
     search?: string,
-    status: string = 'active'
+    status: string = 'active',
+    sortField: string = 'date',
+    sortOrder: number = -1
   ) {
     try {
       const query: any = {};
@@ -332,7 +342,7 @@ export class AdminService {
 
       const [expenses, total] = await Promise.all([
         Expense.find(query)
-          .sort({ date: -1, createdAt: -1 })
+          .sort({ [sortField]: sortOrder as 1 | -1, createdAt: -1 })
           .skip(skip)
           .limit(limit)
           .populate('user', 'email username fullName')
@@ -449,7 +459,9 @@ export class AdminService {
   async getSyncOperations(
     page: number = 1,
     limit: number = 20,
-    status?: string
+    status?: string,
+    sortField: string = 'timestamp',
+    sortOrder: number = -1
   ) {
     try {
       const SyncOperation = mongoose.model('SyncOperation');
@@ -459,7 +471,7 @@ export class AdminService {
       const skip = (page - 1) * limit;
       const [operations, total] = await Promise.all([
         SyncOperation.find(query)
-          .sort({ timestamp: -1 })
+          .sort({ [sortField]: sortOrder as 1 | -1 })
           .skip(skip)
           .limit(limit)
           .populate('user', 'email username')
@@ -480,14 +492,19 @@ export class AdminService {
   /**
    * Get sync conflicts
    */
-  async getSyncConflicts(page: number = 1, limit: number = 20) {
+  async getSyncConflicts(
+    page: number = 1,
+    limit: number = 20,
+    sortField: string = 'timestamp',
+    sortOrder: number = -1
+  ) {
     try {
       const ConflictResolution = mongoose.model('ConflictResolution');
       const skip = (page - 1) * limit;
 
       const [conflicts, total] = await Promise.all([
         ConflictResolution.find()
-          .sort({ timestamp: -1 })
+          .sort({ [sortField]: sortOrder as 1 | -1 })
           .skip(skip)
           .limit(limit)
           .populate('user', 'email username')

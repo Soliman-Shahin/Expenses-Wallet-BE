@@ -41,8 +41,17 @@ export class AdminController {
       const limit = parseInt(req.query.limit as string) || 10;
       const search = req.query.search as string;
       const status = (req.query.status as string) || 'active';
+      const sortField = (req.query.sortField as string) || 'createdAt';
+      const sortOrder = parseInt(req.query.sortOrder as string) || -1;
 
-      const result = await adminService.getUsers(page, limit, search, status);
+      const result = await adminService.getUsers(
+        page,
+        limit,
+        search,
+        status,
+        sortField,
+        sortOrder
+      );
       sendSuccess(res, result, 'Users retrieved successfully');
     } catch (error) {
       next(error);
@@ -116,12 +125,16 @@ export class AdminController {
       const limit = parseInt(req.query.limit as string) || 10;
       const search = req.query.search as string;
       const status = (req.query.status as string) || 'active';
+      const sortField = (req.query.sortField as string) || 'createdAt';
+      const sortOrder = parseInt(req.query.sortOrder as string) || -1;
 
       const result = await adminService.getCategories(
         page,
         limit,
         search,
-        status
+        status,
+        sortField,
+        sortOrder
       );
       sendSuccess(res, result, 'Categories retrieved successfully');
     } catch (error) {
@@ -217,12 +230,16 @@ export class AdminController {
       const limit = parseInt(req.query.limit as string) || 10;
       const search = req.query.search as string;
       const status = (req.query.status as string) || 'active';
+      const sortField = (req.query.sortField as string) || 'date';
+      const sortOrder = parseInt(req.query.sortOrder as string) || -1;
 
       const result = await adminService.getExpenses(
         page,
         limit,
         search,
-        status
+        status,
+        sortField,
+        sortOrder
       );
       sendSuccess(res, result, 'Expenses retrieved successfully');
     } catch (error) {
@@ -295,8 +312,16 @@ export class AdminController {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
       const status = req.query.status as string;
+      const sortField = (req.query.sortField as string) || 'timestamp';
+      const sortOrder = parseInt(req.query.sortOrder as string) || -1;
 
-      const result = await adminService.getSyncOperations(page, limit, status);
+      const result = await adminService.getSyncOperations(
+        page,
+        limit,
+        status,
+        sortField,
+        sortOrder
+      );
       sendSuccess(res, result, 'Sync operations retrieved successfully');
     } catch (error) {
       next(error);
@@ -315,8 +340,15 @@ export class AdminController {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 20;
+      const sortField = (req.query.sortField as string) || 'timestamp';
+      const sortOrder = parseInt(req.query.sortOrder as string) || -1;
 
-      const result = await adminService.getSyncConflicts(page, limit);
+      const result = await adminService.getSyncConflicts(
+        page,
+        limit,
+        sortField,
+        sortOrder
+      );
       sendSuccess(res, result, 'Sync conflicts retrieved successfully');
     } catch (error) {
       next(error);
