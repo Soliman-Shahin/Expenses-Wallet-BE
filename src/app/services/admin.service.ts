@@ -126,7 +126,16 @@ export class AdminService {
    */
   async updateUser(userId: string, updateData: Partial<typeof User>) {
     try {
-      const user = await User.findByIdAndUpdate(userId, updateData, {
+      // Whitelist fields the admin is allowed to update to prevent injection attacks
+      const ALLOWED_FIELDS = ['role', 'fullName', 'phone', 'currency', 'username'];
+      const safeUpdate: Record<string, any> = {};
+      for (const field of ALLOWED_FIELDS) {
+        if ((updateData as any)[field] !== undefined) {
+          safeUpdate[field] = (updateData as any)[field];
+        }
+      }
+
+      const user = await User.findByIdAndUpdate(userId, safeUpdate, {
         new: true,
         runValidators: true,
       }).lean();
@@ -181,7 +190,7 @@ export class AdminService {
       if (status === 'deleted') query._isDeleted = true;
 
       if (search) {
-        query.$or = [{ name: { $regex: search, $options: 'i' } }];
+        query.$or = [{ title: { $regex: search, $options: 'i' } }];
       }
 
       const skip = (page - 1) * limit;
@@ -254,8 +263,21 @@ export class AdminService {
       const category = await Category.findById(categoryId);
       if (!category) throw new Error('Category not found');
 
-      // Allow modifying names, colors, icons, but logic prevents deleting if isDefault
-      Object.assign(category, updateData);
+      // Whitelist updatable fields to prevent injection
+      // Map 'name' from frontend to 'title' (actual schema field)
+      const ALLOWED_FIELDS = ['title', 'icon', 'color', 'type'];
+      const safeUpdate: Record<string, any> = {};
+      for (const field of ALLOWED_FIELDS) {
+        if ((updateData as any)[field] !== undefined) {
+          safeUpdate[field] = (updateData as any)[field];
+        }
+      }
+      // Also accept 'name' from frontend and map it to 'title'
+      if ((updateData as any)['name'] !== undefined) {
+        safeUpdate['title'] = (updateData as any)['name'];
+      }
+
+      Object.assign(category, safeUpdate);
       await category.save();
 
       return category;
@@ -264,6 +286,7 @@ export class AdminService {
       throw error;
     }
   }
+
 
   /**
    * Delete category (soft delete)
@@ -304,8 +327,15 @@ export class AdminService {
       if (!adminUser)
         throw new Error('No admin user found to assign the category to');
 
+      // Map 'name' from frontend to 'title' in the DB schema
+      const data: any = { ...categoryData };
+      if (data.name && !data.title) {
+        data.title = data.name;
+        delete data.name;
+      }
+
       const category = new Category({
-        ...categoryData,
+        ...data,
         user: adminUser._id,
         isDefault: true,
       });
@@ -345,8 +375,8 @@ export class AdminService {
           .sort({ [sortField]: sortOrder as 1 | -1, createdAt: -1 })
           .skip(skip)
           .limit(limit)
-          .populate('user', 'email username fullName')
-          .populate('category', 'name icon color type')
+          .populate('user', 'email username fullName currency')
+          .populate('category', 'title icon color type')
           .lean(),
         Expense.countDocuments(query),
       ]);
@@ -372,8 +402,8 @@ export class AdminService {
   async getExpenseById(expenseId: string) {
     try {
       const expense = await Expense.findById(expenseId)
-        .populate('user', 'email username fullName')
-        .populate('category', 'name icon color type')
+        .populate('user', 'email username fullName currency')
+        .populate('category', 'title icon color type')
         .lean();
 
       if (!expense) throw new Error('Expense not found');
