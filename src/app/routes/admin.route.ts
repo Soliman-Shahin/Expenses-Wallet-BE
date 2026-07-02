@@ -28,6 +28,10 @@ router.delete(
 router.get('/users', adminController.getUsers.bind(adminController));
 router.get('/users/:id', adminController.getUserById.bind(adminController));
 router.put('/users/:id', adminController.updateUser.bind(adminController));
+router.put(
+  '/users/:id/restore',
+  adminController.restoreUser.bind(adminController)
+);
 router.delete('/users/:id', adminController.deleteUser.bind(adminController));
 // ==================== CATEGORIES ====================
 router.get('/categories', adminController.getCategories.bind(adminController));

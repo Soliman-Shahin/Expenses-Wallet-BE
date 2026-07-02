@@ -71,7 +71,14 @@ export class AdminService {
     try {
       const query: any = {};
 
-      if (status === 'active') query._isDeleted = { $ne: true };
+      if (status === 'active') {
+        query.isActive = { $ne: false };
+        query._isDeleted = { $ne: true };
+      }
+      if (status === 'inactive') {
+        query.isActive = false;
+        query._isDeleted = { $ne: true };
+      }
       if (status === 'deleted') query._isDeleted = true;
 
       if (search) {
@@ -149,6 +156,8 @@ export class AdminService {
         'phone',
         'currency',
         'username',
+        'isActive',
+        '_isDeleted',
       ];
       const safeUpdate: Record<string, any> = {};
       for (const field of ALLOWED_FIELDS) {
@@ -190,6 +199,31 @@ export class AdminService {
       return user;
     } catch (error) {
       logger.error('Error soft deleting user:', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Restore user (undo soft delete)
+   */
+  async restoreUser(userId: string) {
+    try {
+      const user = await User.findById(userId);
+      if (!user) throw new Error('User not found');
+
+      user._isDeleted = false;
+      await user.save();
+
+      // Also restore their expenses and categories
+      await Expense.updateMany({ user: user._id }, { _isDeleted: false });
+      await Category.updateMany(
+        { user: user._id, isDefault: false },
+        { _isDeleted: false }
+      );
+
+      return user;
+    } catch (error) {
+      logger.error('Error restoring user:', error as Error);
       throw error;
     }
   }

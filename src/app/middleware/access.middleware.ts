@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { sendError } from '../shared/helper';
 import logger from '../utils/logger';
+import { User } from '../models';
 
 // Use ACCESS_TOKEN_SECRET from .env (must match token generation)
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
@@ -16,7 +17,7 @@ export interface AuthenticatedRequest extends Request {
   user?: { _id: string; email?: string };
 }
 
-export const verifyAccessToken = (
+export const verifyAccessToken = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -49,6 +50,26 @@ export const verifyAccessToken = (
         'Invalid token payload',
         401,
         'AUTH_INVALID_PAYLOAD'
+      );
+    }
+
+    // Check database to ensure user is not deactivated or deleted
+    const userDoc = await User.findById(payload._id)
+      .select('isActive _isDeleted')
+      .lean();
+
+    if (!userDoc) {
+      logger.error('Token valid but user not found in database');
+      return sendError(res, 'User not found', 401, 'AUTH_USER_NOT_FOUND');
+    }
+
+    if (userDoc._isDeleted || userDoc.isActive === false) {
+      logger.error(`Access denied for inactive/deleted user: ${payload._id}`);
+      return sendError(
+        res,
+        'Account is inactive or deleted',
+        401,
+        'AUTH_USER_INACTIVE'
       );
     }
 

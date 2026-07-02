@@ -111,6 +111,23 @@ export class AdminController {
       next(error);
     }
   }
+
+  /**
+   * Restore a user
+   * PUT /v1/admin/users/:id/restore
+   */
+  async restoreUser(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const user = await adminService.restoreUser(req.params.id as string);
+      sendSuccess(res, user, 'User restored successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
   /**
    * Get all categories
    * GET /v1/admin/categories

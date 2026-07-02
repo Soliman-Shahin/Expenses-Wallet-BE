@@ -37,6 +37,8 @@ export class UserService {
   ): Promise<UserDocument> {
     const user = await User.findOne({ email });
     if (!user) throw new Error('User not found');
+    if (user._isDeleted) throw new Error('Account has been deleted');
+    if (user.isActive === false) throw new Error('Account is deactivated');
     const isPasswordMatch = await bcrypt.compare(password, user.password);
     if (!isPasswordMatch) throw new Error('Invalid Password');
     return user;
