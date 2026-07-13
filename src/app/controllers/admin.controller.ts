@@ -59,6 +59,23 @@ export class AdminController {
   }
 
   /**
+   * Create a new user
+   * POST /v1/admin/users
+   */
+  async createUser(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const user = await adminService.createUser(req.body);
+      sendSuccess(res, user, 'User created successfully', 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Get a specific user by ID
    * GET /v1/admin/users/:id
    */
@@ -233,6 +250,26 @@ export class AdminController {
       next(error);
     }
   }
+
+  /**
+   * Restore a category
+   * PUT /v1/admin/categories/:id/restore
+   */
+  async restoreCategory(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const category = await adminService.restoreCategory(
+        req.params.id as string
+      );
+      sendSuccess(res, category, 'Category restored successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * Get all expenses
    * GET /v1/admin/expenses
@@ -295,6 +332,23 @@ export class AdminController {
     try {
       const expense = await adminService.deleteExpense(req.params.id as string);
       sendSuccess(res, expense, 'Expense deleted successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Restore an expense
+   * PUT /v1/admin/expenses/:id/restore
+   */
+  async restoreExpense(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const expense = await adminService.restoreExpense(req.params.id as string);
+      sendSuccess(res, expense, 'Expense restored successfully');
     } catch (error) {
       next(error);
     }

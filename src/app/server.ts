@@ -2,6 +2,7 @@ import logger from './services/logger.service';
 import { config } from 'dotenv';
 import { connectToDB } from './db';
 import { configureExpressApp } from './app';
+import { planService } from './services/plan.service';
 
 const DEFAULT_PORT = 3000;
 
@@ -48,6 +49,9 @@ async function startServer() {
     validateEnvironmentVariables();
 
     await connectToDB();
+    
+    // Seed default subscription plans
+    await planService.seedDefaultPlans();
 
     const app = configureExpressApp();
 

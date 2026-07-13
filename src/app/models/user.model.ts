@@ -3,12 +3,36 @@ import _ from 'lodash';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { config } from 'dotenv';
+import { PlanSlug } from '../types/plan.types';
+import { Permission } from '../types/permissions.types';
 config();
 
+/**
+ * User roles in ascending order of privilege:
+ *   user < moderator < admin < superadmin
+ *
+ * - user       : regular app user (access controlled by subscription plan)
+ * - moderator  : read-only access to the admin dashboard
+ * - admin      : full admin dashboard access (cannot manage plans or other admins)
+ * - superadmin : unrestricted access including plan and admin management
+ */
 export enum UserRole {
   User = 'user',
+  Moderator = 'moderator',
   Admin = 'admin',
+  SuperAdmin = 'superadmin',
 }
+
+/**
+ * Numeric weight for each role — higher = more privileged.
+ * Used by requireRole() middleware for range-based checks.
+ */
+export const ROLE_WEIGHTS: Record<UserRole, number> = {
+  [UserRole.User]: 0,
+  [UserRole.Moderator]: 1,
+  [UserRole.Admin]: 2,
+  [UserRole.SuperAdmin]: 3,
+};
 
 enum SignupType {
   Normal = 'normal',
@@ -53,6 +77,16 @@ interface UserDocument extends Document {
   sessions: IUserSession[];
   isActive?: boolean;
   _isDeleted?: boolean;
+  // ── Subscription / Plan ────────────────────────────────────────────────────
+  /** The user's current subscription plan slug */
+  plan: PlanSlug;
+  /** When the current paid plan expires (null = free plan / lifetime) */
+  planExpiresAt?: Date | null;
+  /** When the current plan started */
+  planStartedAt?: Date | null;
+  /** Optional per-user permission overrides (additive on top of plan defaults) */
+  customPermissions: Permission[];
+  // ──────────────────────────────────────────────────────────────────────────
   createSession(): Promise<string>;
   generateAccessAuthToken(): Promise<string>;
   createRefreshToken(): Promise<string>;
@@ -116,6 +150,20 @@ const UserSchema = new Schema<UserDocument>(
     ],
     isActive: { type: Boolean, default: true },
     _isDeleted: { type: Boolean, default: false },
+    // ── Subscription / Plan Fields ─────────────────────────────────────────
+    plan: {
+      type: String,
+      enum: Object.values(PlanSlug),
+      default: PlanSlug.Free,
+    },
+    planExpiresAt: { type: Date, default: null },
+    planStartedAt: { type: Date, default: null },
+    /** Per-user permission additions (set by superadmin only) */
+    customPermissions: {
+      type: [String],
+      default: [],
+    },
+    // ──────────────────────────────────────────────────────────────────────
   },
   { timestamps: true }
 );
@@ -125,6 +173,12 @@ const UserSchema = new Schema<UserDocument>(
 UserSchema.index({ socialId: 1 }, { sparse: true });
 // Compound index for session token lookups
 UserSchema.index({ _id: 1, 'sessions.token': 1 });
+// Index for plan-based queries (e.g., find all pro users)
+UserSchema.index({ plan: 1 });
+// Index for finding users whose plans have expired
+UserSchema.index({ planExpiresAt: 1 }, { sparse: true });
+// Index for role-based queries
+UserSchema.index({ role: 1 });
 
 // *** Instance methods ***
 UserSchema.methods.toJSON = function () {

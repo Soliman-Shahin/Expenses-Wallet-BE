@@ -4,6 +4,7 @@ import categoryRoutes from './category.route';
 import expenseRoutes from './expense.route';
 import syncRoutes from './sync.route';
 import adminRoutes from './admin.route';
+import planRoutes from './plan.route';
 import {
   trackSyncOperation,
   validateSyncData,
@@ -16,6 +17,7 @@ const router = Router();
 router.use('/user', userRoutes);
 router.use('/categories', categoryRoutes);
 router.use('/expenses', expenseRoutes);
+router.use('/plans', planRoutes);
 
 // Sync middleware scoped to /sync routes only
 router.use(

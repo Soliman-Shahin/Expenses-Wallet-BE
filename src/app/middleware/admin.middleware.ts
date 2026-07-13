@@ -1,55 +1,121 @@
 import { Request, Response, NextFunction } from 'express';
 import { sendError } from '../shared/helper';
-import logger from '../utils/logger';
-import { User, UserRole } from '../models/user.model';
+import logger from '../services/logger.service';
+import { User, UserRole, ROLE_WEIGHTS } from '../models/user.model';
 import { AuthenticatedRequest } from './access.middleware';
 
 /**
- * Admin Middleware
- * 
- * Verifies that the authenticated user has an 'admin' role.
- * Must be used AFTER verifyAccessToken middleware.
- * 
- * Role is checked against the database, not just the JWT payload,
- * since the JWT only contains the user _id.
+ * requireRole
+ *
+ * Middleware factory that verifies the authenticated user has at least one of
+ * the specified roles. Roles are checked against the database (not the JWT)
+ * to reflect real-time changes (e.g., role revocation).
+ *
+ * The check uses role weights, so passing `UserRole.Admin` will also allow
+ * `UserRole.SuperAdmin` (since superadmin > admin in privilege).
+ *
+ * IMPORTANT: Must be used AFTER `verifyAccessToken`.
+ *
+ * @param allowedRoles - One or more roles that are permitted
+ * @returns Express middleware
+ *
+ * @example
+ * // Allow admin AND superadmin
+ * router.use(verifyAccessToken, requireRole(UserRole.Admin));
+ *
+ * // Allow only superadmin
+ * router.use(verifyAccessToken, requireRole(UserRole.SuperAdmin));
+ *
+ * // Allow moderator, admin, and superadmin
+ * router.use(verifyAccessToken, requireRole(UserRole.Moderator));
  */
-export const requireAdmin = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const authReq = req as AuthenticatedRequest;
-    const userId = authReq.user_id;
+export const requireRole = (...allowedRoles: UserRole[]) => {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
+    try {
+      const authReq = req as AuthenticatedRequest;
+      const userId = authReq.user_id;
 
-    if (!userId) {
-      logger.warn('Admin check failed: No user_id in request (verifyAccessToken missing?)');
-      return sendError(res, 'Authentication required', 401, 'AUTH_NO_TOKEN');
-    }
+      if (!userId) {
+        logger.warn(
+          'requireRole: no user_id on request (verifyAccessToken missing?)'
+        );
+        sendError(res, 'Authentication required', 401, 'AUTH_NO_TOKEN');
+        return;
+      }
 
-    // Fetch user from database to check current role
-    const user = await User.findById(userId).select('role').lean();
+      // Fetch fresh role from DB — do not trust JWT payload for roles
+      const user = await User.findById(userId).select('role').lean();
 
-    if (!user) {
-      logger.warn(`Admin check failed: User not found for ID ${userId}`);
-      return sendError(res, 'User not found', 404, 'RESOURCE_NOT_FOUND');
-    }
+      if (!user) {
+        logger.warn(`requireRole: user not found for ID ${userId}`);
+        sendError(res, 'User not found', 404, 'RESOURCE_NOT_FOUND');
+        return;
+      }
 
-    // Role check logic (extensible for future roles if needed)
-    if (user.role !== UserRole.Admin) {
-      logger.warn(`Admin check failed: User ${userId} is not an admin. Role: ${user.role}`);
-      return sendError(
+      const userRole = user.role as UserRole;
+      const userWeight = ROLE_WEIGHTS[userRole] ?? 0;
+
+      // The minimum weight required is the lowest weight among allowedRoles.
+      // e.g., requireRole(Admin) => any role with weight >= Admin is accepted.
+      const minRequiredWeight = Math.min(
+        ...allowedRoles.map((r) => ROLE_WEIGHTS[r] ?? 0)
+      );
+
+      if (userWeight < minRequiredWeight) {
+        logger.warn(
+          `requireRole: access denied. user=${userId} role=${userRole} required=${allowedRoles.join('|')}`
+        );
+        sendError(
+          res,
+          `Insufficient permissions. Required role: ${allowedRoles.join(' or ')}.`,
+          403,
+          'AUTHZ_INSUFFICIENT_PERMISSIONS',
+          { userRole, requiredRoles: allowedRoles }
+        );
+        return;
+      }
+
+      logger.debug(
+        `requireRole: access granted. user=${userId} role=${userRole}`
+      );
+      next();
+    } catch (error: any) {
+      logger.error('Error in requireRole middleware:', error.message);
+      sendError(
         res,
-        'Insufficient permissions. Admin access required.',
-        403,
-        'AUTHZ_INSUFFICIENT_PERMISSIONS'
+        'Internal server error during authorization',
+        500,
+        'INTERNAL_ERROR'
       );
     }
-
-    logger.debug(`Admin access granted for user: ${userId}`);
-    next();
-  } catch (error: any) {
-    logger.error('Error in admin middleware:', error.message);
-    return sendError(res, 'Internal server error during authorization', 500, 'INTERNAL_ERROR');
-  }
+  };
 };
+
+/**
+ * requireAdmin
+ *
+ * Backward-compatible alias for `requireRole(UserRole.Admin)`.
+ * Allows Admin AND SuperAdmin (since superadmin has a higher weight).
+ *
+ * @deprecated Prefer `requireRole(UserRole.Admin)` for explicitness.
+ */
+export const requireAdmin = requireRole(UserRole.Admin);
+
+/**
+ * requireSuperAdmin
+ *
+ * Allows only SuperAdmin users.
+ */
+export const requireSuperAdmin = requireRole(UserRole.SuperAdmin);
+
+/**
+ * requireModerator
+ *
+ * Allows Moderator, Admin, and SuperAdmin users.
+ * Use for read-only admin panel sections.
+ */
+export const requireModerator = requireRole(UserRole.Moderator);

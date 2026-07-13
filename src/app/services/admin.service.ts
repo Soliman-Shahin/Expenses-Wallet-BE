@@ -3,6 +3,8 @@ import { Expense } from '../models/expense.model';
 import { Category } from '../models/category.model';
 import logger from './logger.service';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+import { ConflictError } from '../shared/errors';
 
 /**
  * Admin Service
@@ -145,7 +147,8 @@ export class AdminService {
   }
 
   /**
-   * Update user details (e.g., role)
+   * Update user details (e.g., role, plan, permissions)
+   * Note: For plan assignment with subscription tracking, use planService.assignPlan()
    */
   async updateUser(userId: string, updateData: Partial<typeof User>) {
     try {
@@ -158,6 +161,10 @@ export class AdminService {
         'username',
         'isActive',
         '_isDeleted',
+        'plan',
+        'planExpiresAt',
+        'planStartedAt',
+        'customPermissions',
       ];
       const safeUpdate: Record<string, any> = {};
       for (const field of ALLOWED_FIELDS) {
@@ -229,6 +236,41 @@ export class AdminService {
   }
 
   /**
+   * Create a new user (Admin action)
+   */
+  async createUser(data: Partial<typeof User>) {
+    try {
+      // Check if email already exists
+      const existingUser = await User.findOne({ email: (data as any).email });
+      if (existingUser) {
+        throw new ConflictError('User with this email already exists');
+      }
+
+      const hashedPassword = await bcrypt.hash(
+        (data as any).password as string,
+        10
+      );
+
+      const newUser = new User({
+        ...data,
+        password: hashedPassword,
+        emailVerified: true, // Auto-verify users created by admin
+      });
+
+      await newUser.save();
+
+      const userObj = newUser.toObject();
+      delete (userObj as any).password;
+      delete (userObj as any).sessions;
+
+      return userObj;
+    } catch (error) {
+      logger.error('Error creating user (Admin):', error as Error);
+      throw error;
+    }
+  }
+
+  /**
    * List all categories with pagination, search, and status filter
    */
   async getCategories(
@@ -242,8 +284,17 @@ export class AdminService {
     try {
       const query: any = {};
 
-      if (status === 'active') query._isDeleted = { $ne: true };
-      if (status === 'deleted') query._isDeleted = true;
+      if (status === 'active') {
+        query.isActive = { $ne: false };
+        query._isDeleted = { $ne: true };
+      }
+      if (status === 'inactive') {
+        query.isActive = false;
+        query._isDeleted = { $ne: true };
+      }
+      if (status === 'deleted') {
+        query._isDeleted = true;
+      }
 
       if (search) {
         query.$or = [{ title: { $regex: search, $options: 'i' } }];
@@ -321,7 +372,7 @@ export class AdminService {
 
       // Whitelist updatable fields to prevent injection
       // Map 'name' from frontend to 'title' (actual schema field)
-      const ALLOWED_FIELDS = ['title', 'icon', 'color', 'type'];
+      const ALLOWED_FIELDS = ['title', 'icon', 'color', 'type', 'isActive'];
       const safeUpdate: Record<string, any> = {};
       for (const field of ALLOWED_FIELDS) {
         if ((updateData as any)[field] !== undefined) {
@@ -368,6 +419,30 @@ export class AdminService {
       return category;
     } catch (error) {
       logger.error('Error soft deleting category:', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Restore category
+   */
+  async restoreCategory(categoryId: string) {
+    try {
+      const category = await Category.findById(categoryId);
+      if (!category) throw new Error('Category not found');
+
+      category._isDeleted = false;
+      await category.save();
+
+      // Restore the associated expenses
+      await Expense.updateMany(
+        { category: category._id },
+        { _isDeleted: false }
+      );
+
+      return category;
+    } catch (error) {
+      logger.error('Error restoring category:', error as Error);
       throw error;
     }
   }
@@ -483,6 +558,24 @@ export class AdminService {
       return expense;
     } catch (error) {
       logger.error('Error soft deleting expense:', error as Error);
+      throw error;
+    }
+  }
+
+  /**
+   * Restore expense (undo soft delete)
+   */
+  async restoreExpense(expenseId: string) {
+    try {
+      const expense = await Expense.findById(expenseId);
+      if (!expense) throw new Error('Expense not found');
+
+      expense._isDeleted = false;
+      await expense.save();
+
+      return expense;
+    } catch (error) {
+      logger.error('Error restoring expense:', error as Error);
       throw error;
     }
   }
