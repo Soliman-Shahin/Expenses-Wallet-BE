@@ -35,7 +35,9 @@ export class UserService {
     email: string,
     password: string
   ): Promise<UserDocument> {
-    const user = await User.findOne({ email });
+    // Exclude large profile fields (e.g. base64 avatar) — loading them from
+    // Atlas was adding 10-15s to every login for users with uploaded images.
+    const user = await User.findOne({ email }).select('-image');
     if (!user) throw new Error('User not found');
     if (user._isDeleted) throw new Error('Account has been deleted');
     if (user.isActive === false) throw new Error('Account is deactivated');

@@ -10,7 +10,8 @@
     "start:dev": "nodemon src/app/server.ts",
     "build": "tsc",
     "dev": "nodemon --watch \"src/**/*.ts\" --exec \"ts-node\" src/app/server.ts",
-    "seed:plans": "ts-node src/app/scripts/seed-plans.ts"
+    "seed:plans": "ts-node src/app/scripts/seed-plans.ts",
+    "seed:admin": "ts-node src/app/scripts/seed-admin.ts"
   },
   "author": "Soliman Shahin",
   "license": "ISC",
