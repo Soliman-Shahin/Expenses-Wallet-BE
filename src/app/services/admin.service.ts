@@ -1,4 +1,4 @@
-import { User, UserRole } from '../models/user.model';
+import { User, UserRole, canManageTargetRole, canAssignRole, UserDocument } from '../models/user.model';
 import { Expense } from '../models/expense.model';
 import { Category } from '../models/category.model';
 import logger from './logger.service';
@@ -150,8 +150,19 @@ export class AdminService {
    * Update user details (e.g., role, plan, permissions)
    * Note: For plan assignment with subscription tracking, use planService.assignPlan()
    */
-  async updateUser(userId: string, updateData: Partial<typeof User>) {
+  async updateUser(actorRole: UserRole, userId: string, updateData: Partial<UserDocument>) {
     try {
+      const userToUpdate = await User.findById(userId);
+      if (!userToUpdate) throw new Error('User not found');
+
+      if (!canManageTargetRole(actorRole, userToUpdate.role as UserRole)) {
+        throw new Error('You do not have permission to modify this user');
+      }
+
+      if (updateData.role && !canAssignRole(actorRole, updateData.role as UserRole)) {
+        throw new Error(`You do not have permission to assign the role: ${updateData.role}`);
+      }
+
       // Whitelist fields the admin is allowed to update to prevent injection attacks
       const ALLOWED_FIELDS = [
         'role',
@@ -173,12 +184,9 @@ export class AdminService {
         }
       }
 
-      const user = await User.findByIdAndUpdate(userId, safeUpdate, {
-        new: true,
-        runValidators: true,
-      }).lean();
-      if (!user) throw new Error('User not found');
-      return user;
+      Object.assign(userToUpdate, safeUpdate);
+      await userToUpdate.save();
+      return userToUpdate.toObject();
     } catch (error) {
       logger.error('Error updating user:', error as Error);
       throw error;
@@ -188,10 +196,14 @@ export class AdminService {
   /**
    * Delete user (soft delete)
    */
-  async deleteUser(userId: string) {
+  async deleteUser(actorRole: UserRole, userId: string) {
     try {
       const user = await User.findById(userId);
       if (!user) throw new Error('User not found');
+
+      if (!canManageTargetRole(actorRole, user.role as UserRole)) {
+        throw new Error('You do not have permission to delete this user');
+      }
 
       user._isDeleted = true;
       await user.save();
@@ -213,10 +225,14 @@ export class AdminService {
   /**
    * Restore user (undo soft delete)
    */
-  async restoreUser(userId: string) {
+  async restoreUser(actorRole: UserRole, userId: string) {
     try {
       const user = await User.findById(userId);
       if (!user) throw new Error('User not found');
+
+      if (!canManageTargetRole(actorRole, user.role as UserRole)) {
+        throw new Error('You do not have permission to restore this user');
+      }
 
       user._isDeleted = false;
       await user.save();
@@ -238,8 +254,12 @@ export class AdminService {
   /**
    * Create a new user (Admin action)
    */
-  async createUser(data: Partial<typeof User>) {
+  async createUser(actorRole: UserRole, data: Partial<UserDocument>) {
     try {
+      if (data.role && !canAssignRole(actorRole, data.role as UserRole)) {
+        throw new Error(`You do not have permission to create a user with role: ${data.role}`);
+      }
+
       // Check if email already exists
       const existingUser = await User.findOne({ email: (data as any).email });
       if (existingUser) {

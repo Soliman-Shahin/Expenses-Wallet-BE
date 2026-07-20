@@ -47,16 +47,16 @@ export const requireRole = (...allowedRoles: UserRole[]) => {
         return;
       }
 
-      // Fetch fresh role from DB — do not trust JWT payload for roles
-      const user = await User.findById(userId).select('role').lean();
+      const userRole = authReq.user?.role;
 
-      if (!user) {
-        logger.warn(`requireRole: user not found for ID ${userId}`);
-        sendError(res, 'User not found', 404, 'RESOURCE_NOT_FOUND');
+      if (!userRole) {
+        logger.warn(
+          'requireRole: user role not found on request (verifyAccessToken missing role?)'
+        );
+        sendError(res, 'Authentication required', 401, 'AUTH_NO_TOKEN');
         return;
       }
 
-      const userRole = user.role as UserRole;
       const userWeight = ROLE_WEIGHTS[userRole] ?? 0;
 
       // The minimum weight required is the lowest weight among allowedRoles.

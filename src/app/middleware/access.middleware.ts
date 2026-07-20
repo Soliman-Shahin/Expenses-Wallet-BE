@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { sendError } from '../shared/helper';
 import logger from '../utils/logger';
-import { User } from '../models';
+import { User, UserRole } from '../models';
 
 // Use ACCESS_TOKEN_SECRET from .env (must match token generation)
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
@@ -14,7 +14,7 @@ if (!ACCESS_TOKEN_SECRET) {
 // Export the interface so other files can use it
 export interface AuthenticatedRequest extends Request {
   user_id?: string;
-  user?: { _id: string; email?: string };
+  user?: { _id: string; email?: string; role?: UserRole };
 }
 
 export const verifyAccessToken = async (
@@ -55,7 +55,7 @@ export const verifyAccessToken = async (
 
     // Check database to ensure user is not deactivated or deleted
     const userDoc = await User.findById(payload._id)
-      .select('isActive _isDeleted')
+      .select('isActive _isDeleted role')
       .lean();
 
     if (!userDoc) {
@@ -75,7 +75,7 @@ export const verifyAccessToken = async (
 
     // Attach user id and user object to request for downstream use
     authReq.user_id = payload._id;
-    authReq.user = { _id: payload._id, email: payload.email };
+    authReq.user = { _id: payload._id, email: payload.email, role: userDoc.role as UserRole };
 
     logger.debug('JWT verified successfully for user:', payload._id);
 

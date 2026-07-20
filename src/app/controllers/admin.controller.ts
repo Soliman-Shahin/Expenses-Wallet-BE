@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { sendSuccess } from '../shared/helper';
 import { adminService } from '../services/admin.service';
 import logger from '../services/logger.service';
+import { AuthenticatedRequest } from '../middleware/access.middleware';
+import { UserRole } from '../models/user.model';
 
 /**
  * Admin Controller
@@ -68,7 +70,9 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const user = await adminService.createUser(req.body);
+      const authReq = req as AuthenticatedRequest;
+      const actorRole = authReq.user?.role as UserRole;
+      const user = await adminService.createUser(actorRole, req.body);
       sendSuccess(res, user, 'User created successfully', 201);
     } catch (error) {
       next(error);
@@ -102,7 +106,10 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
+      const authReq = req as AuthenticatedRequest;
+      const actorRole = authReq.user?.role as UserRole;
       const user = await adminService.updateUser(
+        actorRole,
         req.params.id as string,
         req.body
       );
@@ -122,7 +129,9 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const user = await adminService.deleteUser(req.params.id as string);
+      const authReq = req as AuthenticatedRequest;
+      const actorRole = authReq.user?.role as UserRole;
+      const user = await adminService.deleteUser(actorRole, req.params.id as string);
       sendSuccess(res, user, 'User deleted successfully');
     } catch (error) {
       next(error);
@@ -139,7 +148,9 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const user = await adminService.restoreUser(req.params.id as string);
+      const authReq = req as AuthenticatedRequest;
+      const actorRole = authReq.user?.role as UserRole;
+      const user = await adminService.restoreUser(actorRole, req.params.id as string);
       sendSuccess(res, user, 'User restored successfully');
     } catch (error) {
       next(error);

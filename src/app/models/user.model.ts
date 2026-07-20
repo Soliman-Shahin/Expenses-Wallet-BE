@@ -34,6 +34,48 @@ export const ROLE_WEIGHTS: Record<UserRole, number> = {
   [UserRole.SuperAdmin]: 3,
 };
 
+/**
+ * Checks if the actor has permission to manage (edit/delete) the target role.
+ */
+export function canManageTargetRole(actorRole: UserRole, targetRole: UserRole): boolean {
+  const actorWeight = ROLE_WEIGHTS[actorRole] ?? 0;
+  const targetWeight = ROLE_WEIGHTS[targetRole] ?? 0;
+  
+  // Actor must have at least Admin privileges
+  if (actorWeight < ROLE_WEIGHTS[UserRole.Admin]) {
+    return false;
+  }
+  
+  // SuperAdmin can manage anyone
+  if (actorWeight >= ROLE_WEIGHTS[UserRole.SuperAdmin]) {
+    return true;
+  }
+  
+  // Admin can manage anyone EXCEPT SuperAdmin
+  return targetWeight < ROLE_WEIGHTS[UserRole.SuperAdmin];
+}
+
+/**
+ * Checks if the actor has permission to assign a specific role.
+ */
+export function canAssignRole(actorRole: UserRole, roleToAssign: UserRole): boolean {
+  const actorWeight = ROLE_WEIGHTS[actorRole] ?? 0;
+  const assignWeight = ROLE_WEIGHTS[roleToAssign] ?? 0;
+  
+  // Actor must have at least Admin privileges
+  if (actorWeight < ROLE_WEIGHTS[UserRole.Admin]) {
+    return false;
+  }
+  
+  // SuperAdmin can assign any role
+  if (actorWeight >= ROLE_WEIGHTS[UserRole.SuperAdmin]) {
+    return true;
+  }
+  
+  // Admin can assign roles up to Admin (not SuperAdmin)
+  return assignWeight <= ROLE_WEIGHTS[UserRole.Admin];
+}
+
 enum SignupType {
   Normal = 'normal',
   Facebook = 'facebook',
