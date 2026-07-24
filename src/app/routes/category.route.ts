@@ -5,6 +5,7 @@ import {
   checkPlanLimit,
 } from '../middleware/plan.middleware';
 import { requirePermission } from '../middleware/permission.middleware';
+import { requireOwnership, canAccessResource } from '../middleware/resource-ownership.middleware';
 import { Permission } from '../types/permissions.types';
 import {
   createCategory,
@@ -35,13 +36,15 @@ router.get('/list', requirePermission(Permission.CATEGORY_READ), getCategories);
 router.get(
   '/:id',
   requirePermission(Permission.CATEGORY_READ),
+  canAccessResource('category'),
   getCategoryById
 );
 
-// UPDATE - Permission check
+// UPDATE - Permission and ownership check
 router.put(
   '/update/:id',
   requirePermission(Permission.CATEGORY_UPDATE),
+  requireOwnership('category'),
   updateCategory
 );
 
@@ -51,10 +54,11 @@ router.put(
   updateOrder
 );
 
-// DELETE - Permission check
+// DELETE - Permission and ownership check
 router.delete(
   '/delete/:id',
   requirePermission(Permission.CATEGORY_DELETE),
+  requireOwnership('category'),
   deleteCategory
 );
 

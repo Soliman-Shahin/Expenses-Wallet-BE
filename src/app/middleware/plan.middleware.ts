@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import { sendError } from '../shared/helper';
 import { planService } from '../services/plan.service';
+import { permissionCacheService } from '../services/permission-cache.service';
+import { errorMessageService } from '../services/error-message.service';
 import { UserPlanContext, PlanLimits } from '../types/plan.types';
 import { AuthenticatedRequest } from './access.middleware';
 import { PlanRequest } from './permission.middleware';
@@ -40,11 +42,12 @@ export const attachPlanContext = async (
       return;
     }
 
-    const planContext = await planService.getUserPlanContext(userId);
+    // Use cache for better performance
+    const planContext = await permissionCacheService.getUserPlanContext(userId);
     (req as PlanRequest).planContext = planContext;
 
     logger.debug(
-      `Plan context attached: user=${userId} plan=${planContext.planSlug} expired=${planContext.isExpired}`
+      `Plan context attached (cached=${permissionCacheService.isCached(userId)}): user=${userId} plan=${planContext.planSlug} expired=${planContext.isExpired}`
     );
 
     next();
@@ -154,12 +157,22 @@ export const rejectExpiredPlan = async (
   }
 
   if (planReq.planContext.isExpired) {
+    const errorDetails = errorMessageService.getPlanExpiredMessage({
+      plan: planReq.planContext.planSlug,
+      expiredAt: planReq.planContext.planExpiresAt!,
+    });
+    
     sendError(
       res,
-      'Your subscription has expired. Please renew your plan to continue using this feature.',
+      errorDetails.message,
       403,
       'PLAN_EXPIRED',
-      { expiredAt: planReq.planContext.planExpiresAt }
+      {
+        expiredAt: planReq.planContext.planExpiresAt,
+        daysExpired: errorDetails.daysExpired,
+        suggestion: errorDetails.suggestion,
+        renewUrl: errorDetails.renewUrl,
+      }
     );
     return;
   }

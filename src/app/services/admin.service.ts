@@ -2,6 +2,7 @@ import { User, UserRole, canManageTargetRole, canAssignRole, UserDocument } from
 import { Expense } from '../models/expense.model';
 import { Category } from '../models/category.model';
 import logger from './logger.service';
+import { permissionCacheService } from './permission-cache.service';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { ConflictError } from '../shared/errors';
@@ -186,6 +187,13 @@ export class AdminService {
 
       Object.assign(userToUpdate, safeUpdate);
       await userToUpdate.save();
+      
+      // Invalidate cache if role, plan, or permissions changed
+      if (safeUpdate.role || safeUpdate.plan || safeUpdate.customPermissions) {
+        permissionCacheService.invalidateUser(userId);
+        logger.debug(`Invalidated permission cache for user ${userId}`);
+      }
+      
       return userToUpdate.toObject();
     } catch (error) {
       logger.error('Error updating user:', error as Error);

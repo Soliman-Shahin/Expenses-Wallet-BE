@@ -5,6 +5,10 @@ import expenseRoutes from './expense.route';
 import syncRoutes from './sync.route';
 import adminRoutes from './admin.route';
 import planRoutes from './plan.route';
+import auditLogRoutes from './audit-log.route';
+import cacheRoutes from './cache.route';
+import scopeRoutes from './scope.route';
+import rateLimitRoutes from './rate-limit.route';
 import {
   trackSyncOperation,
   validateSyncData,
@@ -30,5 +34,9 @@ router.use(
 );
 
 router.use('/admin', adminRoutes);
+router.use('/audit-logs', auditLogRoutes);
+router.use('/cache', cacheRoutes);
+router.use('/scopes', scopeRoutes);
+router.use('/rate-limits', rateLimitRoutes);
 
 export default router;

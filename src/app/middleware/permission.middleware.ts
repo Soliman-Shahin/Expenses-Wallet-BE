@@ -3,6 +3,7 @@ import { sendError } from '../shared/helper';
 import { Permission } from '../types/permissions.types';
 import { UserPlanContext } from '../types/plan.types';
 import { AuthenticatedRequest } from './access.middleware';
+import { errorMessageService } from '../services/error-message.service';
 import logger from '../services/logger.service';
 
 /**
@@ -64,12 +65,26 @@ export const requirePermission = (permission: Permission) => {
         logger.warn(
           `Permission denied: user=${planReq.user_id} plan=${planSlug} missing=${permission}`
         );
+        
+        // Generate enhanced error message with upgrade suggestions
+        const errorDetails = errorMessageService.getPermissionDeniedMessage({
+          permission,
+          currentPlan: planSlug,
+        });
+        
         return sendError(
           res,
-          `The "${permission}" feature is not available on your current plan. Upgrade to unlock it.`,
+          errorDetails.message,
           403,
           'PERMISSION_DENIED',
-          { permission, currentPlan: planSlug }
+          {
+            permission,
+            currentPlan: planSlug,
+            requiredPlan: errorDetails.requiredPlan,
+            suggestion: errorDetails.suggestion,
+            upgradeUrl: errorDetails.upgradeUrl,
+            learnMoreUrl: errorDetails.learnMoreUrl,
+          }
         );
       }
 

@@ -14,6 +14,7 @@ import {
   checkPlanLimit,
 } from '../middleware/plan.middleware';
 import { requirePermission } from '../middleware/permission.middleware';
+import { requireOwnership, canAccessResource } from '../middleware/resource-ownership.middleware';
 import { Permission } from '../types/permissions.types';
 import { expenseSchema } from '../validations/expense.validation';
 
@@ -41,20 +42,27 @@ router.get(
 
 router.get('/', requirePermission(Permission.EXPENSE_READ), getExpenses);
 
-router.get('/:id', requirePermission(Permission.EXPENSE_READ), getExpenseById);
+router.get(
+  '/:id',
+  requirePermission(Permission.EXPENSE_READ),
+  canAccessResource('expense'),
+  getExpenseById
+);
 
-// UPDATE - Permission check
+// UPDATE - Permission and ownership check
 router.put(
   '/:id',
   requirePermission(Permission.EXPENSE_UPDATE),
+  requireOwnership('expense'),
   validateRequestWithZod(expenseSchema),
   updateExpense
 );
 
-// DELETE - Permission check
+// DELETE - Permission and ownership check
 router.delete(
   '/:id',
   requirePermission(Permission.EXPENSE_DELETE),
+  requireOwnership('expense'),
   deleteExpense
 );
 
