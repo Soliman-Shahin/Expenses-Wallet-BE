@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { sendError } from '../shared/helper';
 import { planService } from '../services/plan.service';
 import { permissionCacheService } from '../services/permission-cache.service';
+import { temporaryPermissionService } from '../services/temporary-permission.service';
 import { errorMessageService } from '../services/error-message.service';
 import { UserPlanContext, PlanLimits } from '../types/plan.types';
 import { AuthenticatedRequest } from './access.middleware';
@@ -44,10 +45,23 @@ export const attachPlanContext = async (
 
     // Use cache for better performance
     const planContext = await permissionCacheService.getUserPlanContext(userId);
+    
+    // Add temporary permissions to the context
+    const tempPermissions = await temporaryPermissionService.getActivePermissionsList(userId);
+    if (tempPermissions.length > 0) {
+      // Merge temporary permissions with plan permissions (avoid duplicates)
+      const allPermissions = [...new Set([...planContext.permissions, ...tempPermissions])];
+      planContext.permissions = allPermissions;
+      
+      logger.debug(
+        `Added ${tempPermissions.length} temporary permissions for user ${userId}`
+      );
+    }
+    
     (req as PlanRequest).planContext = planContext;
 
     logger.debug(
-      `Plan context attached (cached=${permissionCacheService.isCached(userId)}): user=${userId} plan=${planContext.planSlug} expired=${planContext.isExpired}`
+      `Plan context attached (cached=${permissionCacheService.isCached(userId)}): user=${userId} plan=${planContext.planSlug} expired=${planContext.isExpired} permissions=${planContext.permissions.length}`
     );
 
     next();

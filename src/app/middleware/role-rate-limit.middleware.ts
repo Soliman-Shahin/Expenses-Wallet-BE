@@ -59,11 +59,15 @@ export const createRoleBasedRateLimiter = (
     windowMs: 15 * 60 * 1000, // Default window (will be overridden per user)
     max: 100,                  // Default max (will be overridden per user)
     
-    // Use user ID as key for tracking
+    // Use user ID as key for tracking (standardHeaders handles IPv6 automatically)
     keyGenerator: (req: Request) => {
       const authReq = req as AuthenticatedRequest;
-      return authReq.user_id || req.ip || 'anonymous';
+      return authReq.user_id || 'anonymous';
     },
+    
+    // Let express-rate-limit handle IP-based fallback with IPv6 support
+    standardHeaders: true,
+    legacyHeaders: false,
 
     // Skip rate limiting for certain conditions
     skip: (req: Request) => {
@@ -109,10 +113,6 @@ export const createRoleBasedRateLimiter = (
         }
       );
     },
-
-    // Store rate limit info in headers
-    standardHeaders: true,
-    legacyHeaders: false,
 
     // Custom store per role (in-memory for now)
     // In production, use Redis for distributed systems

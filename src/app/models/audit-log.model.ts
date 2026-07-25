@@ -25,6 +25,10 @@ export enum AuditAction {
   PERMISSION_REVOKED = 'permission:revoked',
   CUSTOM_PERMISSION_ADDED = 'custom_permission:added',
   CUSTOM_PERMISSION_REMOVED = 'custom_permission:removed',
+  PERMISSION_GRANT_TEMPORARY = 'permission:grant_temporary',
+  PERMISSION_REVOKE_TEMPORARY = 'permission:revoke_temporary',
+  PERMISSION_EXPIRE_TEMPORARY = 'permission:expire_temporary',
+  PERMISSION_EXTEND_TEMPORARY = 'permission:extend_temporary',
   
   // Plan Management
   PLAN_CREATED = 'plan:created',

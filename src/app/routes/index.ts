@@ -9,6 +9,8 @@ import auditLogRoutes from './audit-log.route';
 import cacheRoutes from './cache.route';
 import scopeRoutes from './scope.route';
 import rateLimitRoutes from './rate-limit.route';
+import temporaryPermissionRoutes from './temporary-permission.route';
+import permissionMatrixRoutes from './permission-matrix.route';
 import {
   trackSyncOperation,
   validateSyncData,
@@ -38,5 +40,7 @@ router.use('/audit-logs', auditLogRoutes);
 router.use('/cache', cacheRoutes);
 router.use('/scopes', scopeRoutes);
 router.use('/rate-limits', rateLimitRoutes);
+router.use('/temporary-permissions', temporaryPermissionRoutes);
+router.use('/permissions', permissionMatrixRoutes);
 
 export default router;
