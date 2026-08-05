@@ -115,7 +115,7 @@ interface UserDocument extends Document {
   salary?: Array<{ label: string; amount: number }>;
   currency?: string;
   emailVerified?: boolean;
-  role: UserRole;
+  role: string;
   sessions: IUserSession[];
   isActive?: boolean;
   _isDeleted?: boolean;
@@ -181,7 +181,6 @@ const UserSchema = new Schema<UserDocument>(
     emailVerified: { type: Boolean, default: false },
     role: {
       type: String,
-      enum: Object.values(UserRole),
       default: UserRole.User,
     },
     sessions: [

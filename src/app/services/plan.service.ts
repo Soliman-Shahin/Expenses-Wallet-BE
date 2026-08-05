@@ -4,6 +4,7 @@ import { Subscription } from '../models/subscription.model';
 import { User, UserDocument } from '../models/user.model';
 import { Category } from '../models/category.model';
 import { Expense } from '../models/expense.model';
+import { roleService } from './role.service';
 import {
   PlanSlug,
   PlanLimits,
@@ -193,7 +194,7 @@ export class PlanService {
    */
   async getUserPlanContext(userId: string): Promise<UserPlanContext> {
     const user = await User.findById(userId)
-      .select('plan planExpiresAt customPermissions')
+      .select('plan planExpiresAt customPermissions role')
       .lean<UserDocument>();
     if (!user) throw new NotFoundError('User', userId);
 
@@ -201,8 +202,16 @@ export class PlanService {
     const isExpired =
       user.planExpiresAt != null && new Date(user.planExpiresAt) < new Date();
 
+    let rolePermissions: Permission[] = [];
+    if (user.role) {
+      const role = await roleService.getRoleBySlug(user.role);
+      if (role) {
+        rolePermissions = role.permissions;
+      }
+    }
+
     const permissions = Array.from(
-      new Set([...plan.features, ...(user.customPermissions || [])])
+      new Set([...plan.features, ...(user.customPermissions || []), ...rolePermissions])
     );
 
     return {
