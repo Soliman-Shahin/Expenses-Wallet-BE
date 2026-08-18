@@ -12,6 +12,7 @@ import rateLimitRoutes from './rate-limit.route';
 import temporaryPermissionRoutes from './temporary-permission.route';
 import permissionMatrixRoutes from './permission-matrix.route';
 import roleRoutes from './role.routes';
+import notificationRoutes from './notification.route';
 import {
   trackSyncOperation,
   validateSyncData,
@@ -44,5 +45,6 @@ router.use('/rate-limits', rateLimitRoutes);
 router.use('/temporary-permissions', temporaryPermissionRoutes);
 router.use('/permissions', permissionMatrixRoutes);
 router.use('/roles', roleRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;

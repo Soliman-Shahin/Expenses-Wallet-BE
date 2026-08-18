@@ -6,6 +6,10 @@ import { permissionCacheService } from './permission-cache.service';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { ConflictError } from '../shared/errors';
+import { getSocketService } from './socket.service';
+import { Request } from 'express';
+import { auditLogService } from './audit-log.service';
+import { AuditAction } from '../models/audit-log.model';
 
 /**
  * Admin Service
@@ -14,6 +18,54 @@ import { ConflictError } from '../shared/errors';
  * Bypasses user-scoped logic found in regular services.
  */
 export class AdminService {
+  private async notifyAndAudit(params: {
+    req?: Request;
+    actorId?: string;
+    actorEmail?: string;
+    actorRole?: UserRole;
+    action: AuditAction;
+    notification: { title: string; message: string; type: 'info' | 'success' | 'warn' | 'error' };
+    changes?: Record<string, any>;
+    targetUserId?: string;
+    targetResourceType?: string;
+    targetResourceId?: string;
+  }) {
+    let auditLogId: string | undefined;
+
+    try {
+      const auditLog = await auditLogService.log({
+        req: params.req,
+        actorId: params.actorId,
+        actorEmail: params.actorEmail,
+        actorRole: params.actorRole,
+        action: params.action,
+        targetUserId: params.targetUserId,
+        targetResourceType: params.targetResourceType,
+        targetResourceId: params.targetResourceId,
+        changes: params.changes
+      });
+      auditLogId = auditLog._id.toString();
+    } catch (err) {
+      logger.error('Failed to log audit event in notifyAndAudit', err as Error);
+    }
+
+    try {
+      const socketService = getSocketService();
+      socketService.broadcastNotification({
+        title: params.notification.title,
+        message: params.notification.message,
+        type: params.notification.type,
+        action: params.action,
+        actor: { id: params.actorId, email: params.actorEmail, role: params.actorRole },
+        resource: { type: params.targetResourceType, id: params.targetResourceId, name: params.targetResourceType },
+        changes: params.changes,
+        auditLogId: auditLogId
+      });
+    } catch (err) {
+      logger.error('Failed to broadcast socket notification in notifyAndAudit', err as Error);
+    }
+  }
+
   /**
    * Get global system statistics
    */
@@ -151,7 +203,7 @@ export class AdminService {
    * Update user details (e.g., role, plan, permissions)
    * Note: For plan assignment with subscription tracking, use planService.assignPlan()
    */
-  async updateUser(actorRole: UserRole, userId: string, updateData: Partial<UserDocument>) {
+  async updateUser(actorRole: UserRole, userId: string, updateData: Partial<UserDocument>, req?: Request) {
     try {
       const userToUpdate = await User.findById(userId);
       if (!userToUpdate) throw new Error('User not found');
@@ -164,7 +216,6 @@ export class AdminService {
         throw new Error(`You do not have permission to assign the role: ${updateData.role}`);
       }
 
-      // Whitelist fields the admin is allowed to update to prevent injection attacks
       const ALLOWED_FIELDS = [
         'role',
         'fullName',
@@ -188,12 +239,26 @@ export class AdminService {
       Object.assign(userToUpdate, safeUpdate);
       await userToUpdate.save();
       
-      // Invalidate cache if role, plan, or permissions changed
       if (safeUpdate.role || safeUpdate.plan || safeUpdate.customPermissions) {
         permissionCacheService.invalidateUser(userId);
         logger.debug(`Invalidated permission cache for user ${userId}`);
       }
       
+      await this.notifyAndAudit({
+        req,
+        actorRole,
+        action: AuditAction.USER_UPDATED,
+        notification: {
+          title: 'User Updated',
+          message: `User ${userToUpdate.email} has been updated.`,
+          type: 'info'
+        },
+        changes: safeUpdate,
+        targetUserId: userToUpdate._id.toString(),
+        targetResourceType: 'User',
+        targetResourceId: userToUpdate._id.toString()
+      });
+
       return userToUpdate.toObject();
     } catch (error) {
       logger.error('Error updating user:', error as Error);
@@ -204,7 +269,7 @@ export class AdminService {
   /**
    * Delete user (soft delete)
    */
-  async deleteUser(actorRole: UserRole, userId: string) {
+  async deleteUser(actorRole: UserRole, userId: string, req?: Request) {
     try {
       const user = await User.findById(userId);
       if (!user) throw new Error('User not found');
@@ -216,12 +281,25 @@ export class AdminService {
       user._isDeleted = true;
       await user.save();
 
-      // Also soft delete their expenses and categories
       await Expense.updateMany({ user: user._id }, { _isDeleted: true });
       await Category.updateMany(
         { user: user._id, isDefault: false },
         { _isDeleted: true }
       );
+
+      await this.notifyAndAudit({
+        req,
+        actorRole,
+        action: AuditAction.USER_DELETED,
+        notification: {
+          title: 'User Deleted',
+          message: `User ${user.email} was deleted.`,
+          type: 'warn'
+        },
+        targetUserId: user._id.toString(),
+        targetResourceType: 'User',
+        targetResourceId: user._id.toString()
+      });
 
       return user;
     } catch (error) {
@@ -233,7 +311,7 @@ export class AdminService {
   /**
    * Restore user (undo soft delete)
    */
-  async restoreUser(actorRole: UserRole, userId: string) {
+  async restoreUser(actorRole: UserRole, userId: string, req?: Request) {
     try {
       const user = await User.findById(userId);
       if (!user) throw new Error('User not found');
@@ -245,12 +323,25 @@ export class AdminService {
       user._isDeleted = false;
       await user.save();
 
-      // Also restore their expenses and categories
       await Expense.updateMany({ user: user._id }, { _isDeleted: false });
       await Category.updateMany(
         { user: user._id, isDefault: false },
         { _isDeleted: false }
       );
+
+      await this.notifyAndAudit({
+        req,
+        actorRole,
+        action: AuditAction.USER_RESTORED,
+        notification: {
+          title: 'User Restored',
+          message: `User ${user.email} was restored.`,
+          type: 'success'
+        },
+        targetUserId: user._id.toString(),
+        targetResourceType: 'User',
+        targetResourceId: user._id.toString()
+      });
 
       return user;
     } catch (error) {
@@ -262,13 +353,12 @@ export class AdminService {
   /**
    * Create a new user (Admin action)
    */
-  async createUser(actorRole: UserRole, data: Partial<UserDocument>) {
+  async createUser(actorRole: UserRole, data: Partial<UserDocument>, req?: Request) {
     try {
       if (data.role && !canAssignRole(actorRole, data.role as UserRole)) {
         throw new Error(`You do not have permission to create a user with role: ${data.role}`);
       }
 
-      // Check if email already exists
       const existingUser = await User.findOne({ email: (data as any).email });
       if (existingUser) {
         throw new ConflictError('User with this email already exists');
@@ -282,7 +372,7 @@ export class AdminService {
       const newUser = new User({
         ...data,
         password: hashedPassword,
-        emailVerified: true, // Auto-verify users created by admin
+        emailVerified: true,
       });
 
       await newUser.save();
@@ -290,6 +380,21 @@ export class AdminService {
       const userObj = newUser.toObject();
       delete (userObj as any).password;
       delete (userObj as any).sessions;
+
+      await this.notifyAndAudit({
+        req,
+        actorRole,
+        action: AuditAction.USER_CREATED,
+        notification: {
+          title: 'New User Created',
+          message: `User ${newUser.email} joined.`,
+          type: 'success'
+        },
+        changes: data,
+        targetUserId: newUser._id.toString(),
+        targetResourceType: 'User',
+        targetResourceId: newUser._id.toString()
+      });
 
       return userObj;
     } catch (error) {
@@ -392,14 +497,13 @@ export class AdminService {
    */
   async updateCategory(
     categoryId: string,
-    updateData: Partial<typeof Category>
+    updateData: Partial<typeof Category>,
+    req?: Request
   ) {
     try {
       const category = await Category.findById(categoryId);
       if (!category) throw new Error('Category not found');
 
-      // Whitelist updatable fields to prevent injection
-      // Map 'name' from frontend to 'title' (actual schema field)
       const ALLOWED_FIELDS = ['title', 'icon', 'color', 'type', 'isActive'];
       const safeUpdate: Record<string, any> = {};
       for (const field of ALLOWED_FIELDS) {
@@ -407,13 +511,25 @@ export class AdminService {
           safeUpdate[field] = (updateData as any)[field];
         }
       }
-      // Also accept 'name' from frontend and map it to 'title'
       if ((updateData as any)['name'] !== undefined) {
         safeUpdate['title'] = (updateData as any)['name'];
       }
 
       Object.assign(category, safeUpdate);
       await category.save();
+
+      await this.notifyAndAudit({
+        req,
+        action: AuditAction.CATEGORY_UPDATED,
+        notification: {
+          title: 'Category Updated',
+          message: `Category '${category.title}' was updated.`,
+          type: 'info'
+        },
+        changes: safeUpdate,
+        targetResourceType: 'Category',
+        targetResourceId: category._id.toString()
+      });
 
       return category;
     } catch (error) {
@@ -425,7 +541,7 @@ export class AdminService {
   /**
    * Delete category (soft delete)
    */
-  async deleteCategory(categoryId: string) {
+  async deleteCategory(categoryId: string, req?: Request) {
     try {
       const category = await Category.findById(categoryId);
       if (!category) throw new Error('Category not found');
@@ -437,12 +553,22 @@ export class AdminService {
       category._isDeleted = true;
       await category.save();
 
-      // We should probably also soft-delete related expenses, or keep them but hide the category
-      // For now we will soft-delete the associated expenses
       await Expense.updateMany(
         { category: category._id },
-        { _isDeleted: true }
+        { $set: { _isDeleted: true } }
       );
+
+      await this.notifyAndAudit({
+        req,
+        action: AuditAction.CATEGORY_DELETED,
+        notification: {
+          title: 'Category Deleted',
+          message: `Category '${category.title}' was deleted.`,
+          type: 'warn'
+        },
+        targetResourceType: 'Category',
+        targetResourceId: category._id.toString()
+      });
 
       return category;
     } catch (error) {
@@ -454,7 +580,7 @@ export class AdminService {
   /**
    * Restore category
    */
-  async restoreCategory(categoryId: string) {
+  async restoreCategory(categoryId: string, req?: Request) {
     try {
       const category = await Category.findById(categoryId);
       if (!category) throw new Error('Category not found');
@@ -462,11 +588,22 @@ export class AdminService {
       category._isDeleted = false;
       await category.save();
 
-      // Restore the associated expenses
       await Expense.updateMany(
         { category: category._id },
         { _isDeleted: false }
       );
+
+      await this.notifyAndAudit({
+        req,
+        action: AuditAction.CATEGORY_RESTORED,
+        notification: {
+          title: 'Category Restored',
+          message: `Category '${category.title}' was restored.`,
+          type: 'success'
+        },
+        targetResourceType: 'Category',
+        targetResourceId: category._id.toString()
+      });
 
       return category;
     } catch (error) {
@@ -478,14 +615,12 @@ export class AdminService {
   /**
    * Create a system default category
    */
-  async createCategory(categoryData: Partial<typeof Category>) {
+  async createCategory(categoryData: Partial<typeof Category>, req?: Request) {
     try {
-      // Find the admin user to assign as owner, or we can use a system placeholder if not required
       const adminUser = await User.findOne({ role: UserRole.Admin });
       if (!adminUser)
         throw new Error('No admin user found to assign the category to');
 
-      // Map 'name' from frontend to 'title' in the DB schema
       const data: any = { ...categoryData };
       if (data.name && !data.title) {
         data.title = data.name;
@@ -498,6 +633,20 @@ export class AdminService {
         isDefault: true,
       });
       await category.save();
+      
+      await this.notifyAndAudit({
+        req,
+        action: AuditAction.CATEGORY_CREATED,
+        notification: {
+          title: 'New Category',
+          message: `Category '${category.title}' was created.`,
+          type: 'success'
+        },
+        changes: data,
+        targetResourceType: 'Category',
+        targetResourceId: category._id.toString()
+      });
+
       return category;
     } catch (error) {
       logger.error('Error creating category:', error as Error);
@@ -575,13 +724,25 @@ export class AdminService {
   /**
    * Delete expense (soft delete)
    */
-  async deleteExpense(expenseId: string) {
+  async deleteExpense(expenseId: string, req?: Request) {
     try {
       const expense = await Expense.findById(expenseId);
       if (!expense) throw new Error('Expense not found');
 
       expense._isDeleted = true;
       await expense.save();
+
+      await this.notifyAndAudit({
+        req,
+        action: AuditAction.EXPENSE_DELETED,
+        notification: {
+          title: 'Expense Deleted',
+          message: `An expense of ${expense.amount} was deleted.`,
+          type: 'warn'
+        },
+        targetResourceType: 'Expense',
+        targetResourceId: expense._id.toString()
+      });
 
       return expense;
     } catch (error) {
@@ -593,13 +754,25 @@ export class AdminService {
   /**
    * Restore expense (undo soft delete)
    */
-  async restoreExpense(expenseId: string) {
+  async restoreExpense(expenseId: string, req?: Request) {
     try {
       const expense = await Expense.findById(expenseId);
       if (!expense) throw new Error('Expense not found');
 
       expense._isDeleted = false;
       await expense.save();
+
+      await this.notifyAndAudit({
+        req,
+        action: AuditAction.EXPENSE_RESTORED,
+        notification: {
+          title: 'Expense Restored',
+          message: `An expense of ${expense.amount} was restored.`,
+          type: 'success'
+        },
+        targetResourceType: 'Expense',
+        targetResourceId: expense._id.toString()
+      });
 
       return expense;
     } catch (error) {

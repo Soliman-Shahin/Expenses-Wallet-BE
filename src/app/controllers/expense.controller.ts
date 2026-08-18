@@ -11,7 +11,7 @@ import { AppError } from '../shared/errors';
 export const createExpense = async (req: CustomRequest, res: Response) => {
   try {
     const user = req.user_id || '';
-    const expense = await ExpenseService.createExpense(req.body, user);
+    const expense = await ExpenseService.createExpense(req.body, user, req);
     sendSuccess(res, expense, 'Expense created successfully');
   } catch (error: any) {
     // Propagate AppError subclasses (PlanLimitError, etc.) with correct status code
@@ -96,7 +96,8 @@ export const updateExpense = async (req: CustomRequest, res: Response) => {
     const updatedExpense = await ExpenseService.updateExpense(
       id,
       req.body,
-      user
+      user,
+      req
     );
     if (!updatedExpense) {
       return sendError(res, 'Expense not found', 404);
@@ -111,7 +112,7 @@ export const deleteExpense = async (req: CustomRequest, res: Response) => {
   try {
     const id = (req.params.id as string) || '';
     const user = req.user_id || '';
-    const deletedExpense = await ExpenseService.deleteExpense(id, user);
+    const deletedExpense = await ExpenseService.deleteExpense(id, user, req);
     if (!deletedExpense) {
       return sendError(res, 'Expense not found', 404);
     }

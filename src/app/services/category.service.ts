@@ -1,13 +1,62 @@
 import { Category } from '../models/category.model';
 import { Types } from 'mongoose';
 import { cacheService } from './cache.service';
+import { getSocketService } from './socket.service';
+import { Request } from 'express';
+import { auditLogService } from './audit-log.service';
+import { AuditAction } from '../models/audit-log.model';
+import logger from './logger.service';
 
 export class CategoryService {
+  private static async notifyAndAudit(params: {
+    req?: Request;
+    actorId?: string;
+    action: AuditAction;
+    notification: { title: string; message: string; type: 'info' | 'success' | 'warn' | 'error' };
+    changes?: Record<string, any>;
+    targetUserId?: string;
+    targetResourceType?: string;
+    targetResourceId?: string;
+  }) {
+    let auditLogId: string | undefined;
+
+    try {
+      const auditLog = await auditLogService.log({
+        req: params.req,
+        actorId: params.actorId,
+        action: params.action,
+        targetUserId: params.targetUserId,
+        targetResourceType: params.targetResourceType,
+        targetResourceId: params.targetResourceId,
+        changes: params.changes
+      });
+      auditLogId = auditLog._id.toString();
+    } catch (err) {
+      logger.error('Failed to log audit event in notifyAndAudit', err as Error);
+    }
+
+    try {
+      const socketService = getSocketService();
+      socketService.broadcastNotification({
+        title: params.notification.title,
+        message: params.notification.message,
+        type: params.notification.type,
+        action: params.action,
+        actor: { id: params.actorId },
+        resource: { type: params.targetResourceType, id: params.targetResourceId, name: params.targetResourceType },
+        changes: params.changes,
+        auditLogId: auditLogId
+      });
+    } catch (err) {
+      logger.error('Failed to broadcast socket notification in notifyAndAudit', err as Error);
+    }
+  }
+
   static clearUserCategoryCache(userId: string) {
     cacheService.delByPrefix(`categories:${userId}`);
   }
 
-  static async createCategory(data: any, userId: string) {
+  static async createCategory(data: any, userId: string, req?: Request) {
     const category = new Category({
       ...data,
       user: userId,
@@ -18,6 +67,22 @@ export class CategoryService {
     });
     const result = await category.save();
     this.clearUserCategoryCache(userId);
+
+    await this.notifyAndAudit({
+      req,
+      actorId: userId,
+      action: AuditAction.CATEGORY_CREATED,
+      notification: {
+        title: 'Category Created',
+        message: `A new category was created.`,
+        type: 'success'
+      },
+      changes: data,
+      targetUserId: userId,
+      targetResourceType: 'Category',
+      targetResourceId: result._id.toString()
+    });
+
     return result;
   }
 
@@ -67,7 +132,7 @@ export class CategoryService {
     return category;
   }
 
-  static async updateCategory(id: string, data: any, userId: string) {
+  static async updateCategory(id: string, data: any, userId: string, req?: Request) {
     const category = await Category.findOne({ _id: id, user: userId });
     if (!category) return null;
 
@@ -85,10 +150,26 @@ export class CategoryService {
       { new: true }
     );
     this.clearUserCategoryCache(userId);
+
+    await this.notifyAndAudit({
+      req,
+      actorId: userId,
+      action: AuditAction.CATEGORY_UPDATED,
+      notification: {
+        title: 'Category Updated',
+        message: `A category was updated.`,
+        type: 'info'
+      },
+      changes: data,
+      targetUserId: userId,
+      targetResourceType: 'Category',
+      targetResourceId: id
+    });
+
     return updated;
   }
 
-  static async deleteCategory(id: string, userId: string) {
+  static async deleteCategory(id: string, userId: string, req?: Request) {
     const category = await Category.findOne({ _id: id, user: userId });
 
     if (!category) {
@@ -110,6 +191,21 @@ export class CategoryService {
       { new: true }
     );
     this.clearUserCategoryCache(userId);
+
+    await this.notifyAndAudit({
+      req,
+      actorId: userId,
+      action: AuditAction.CATEGORY_DELETED,
+      notification: {
+        title: 'Category Deleted',
+        message: `A category was deleted.`,
+        type: 'warn'
+      },
+      targetUserId: userId,
+      targetResourceType: 'Category',
+      targetResourceId: id
+    });
+
     return deleted;
   }
 

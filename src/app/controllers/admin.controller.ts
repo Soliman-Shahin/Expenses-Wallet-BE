@@ -72,7 +72,7 @@ export class AdminController {
     try {
       const authReq = req as AuthenticatedRequest;
       const actorRole = authReq.user?.role as UserRole;
-      const user = await adminService.createUser(actorRole, req.body);
+      const user = await adminService.createUser(actorRole, req.body, req);
       sendSuccess(res, user, 'User created successfully', 201);
     } catch (error) {
       next(error);
@@ -111,7 +111,8 @@ export class AdminController {
       const user = await adminService.updateUser(
         actorRole,
         req.params.id as string,
-        req.body
+        req.body,
+        req
       );
       sendSuccess(res, user, 'User updated successfully');
     } catch (error) {
@@ -131,7 +132,7 @@ export class AdminController {
     try {
       const authReq = req as AuthenticatedRequest;
       const actorRole = authReq.user?.role as UserRole;
-      const user = await adminService.deleteUser(actorRole, req.params.id as string);
+      const user = await adminService.deleteUser(actorRole, req.params.id as string, req);
       sendSuccess(res, user, 'User deleted successfully');
     } catch (error) {
       next(error);
@@ -150,7 +151,7 @@ export class AdminController {
     try {
       const authReq = req as AuthenticatedRequest;
       const actorRole = authReq.user?.role as UserRole;
-      const user = await adminService.restoreUser(actorRole, req.params.id as string);
+      const user = await adminService.restoreUser(actorRole, req.params.id as string, req);
       sendSuccess(res, user, 'User restored successfully');
     } catch (error) {
       next(error);
@@ -218,7 +219,8 @@ export class AdminController {
     try {
       const category = await adminService.updateCategory(
         req.params.id as string,
-        req.body
+        req.body,
+        req
       );
       sendSuccess(res, category, 'Category updated successfully');
     } catch (error) {
@@ -236,7 +238,7 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const category = await adminService.createCategory(req.body);
+      const category = await adminService.createCategory(req.body, req);
       sendSuccess(res, category, 'System category created successfully', 201);
     } catch (error) {
       next(error);
@@ -254,7 +256,8 @@ export class AdminController {
   ): Promise<void> {
     try {
       const category = await adminService.deleteCategory(
-        req.params.id as string
+        req.params.id as string,
+        req
       );
       sendSuccess(res, category, 'Category deleted successfully');
     } catch (error) {
@@ -273,7 +276,8 @@ export class AdminController {
   ): Promise<void> {
     try {
       const category = await adminService.restoreCategory(
-        req.params.id as string
+        req.params.id as string,
+        req
       );
       sendSuccess(res, category, 'Category restored successfully');
     } catch (error) {
@@ -341,7 +345,7 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const expense = await adminService.deleteExpense(req.params.id as string);
+      const expense = await adminService.deleteExpense(req.params.id as string, req);
       sendSuccess(res, expense, 'Expense deleted successfully');
     } catch (error) {
       next(error);
@@ -358,7 +362,7 @@ export class AdminController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const expense = await adminService.restoreExpense(req.params.id as string);
+      const expense = await adminService.restoreExpense(req.params.id as string, req);
       sendSuccess(res, expense, 'Expense restored successfully');
     } catch (error) {
       next(error);
