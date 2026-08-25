@@ -11,7 +11,8 @@ import { swaggerSpec } from './config/swagger.config';
 import { conditionalCsrfProtection } from './middleware/csrf.middleware';
 import routes from './routes';
 import healthRoutes from './routes/health.route';
-import { errorHandler } from './middleware/error-handler';
+import { enhancedErrorHandler } from './middleware/error-handler-enhanced';
+// Import sync middleware to apply them to the correct routes only
 import {
   trackSyncOperation,
   handleSyncError,
@@ -19,6 +20,7 @@ import {
   rateLimitSync,
   addSyncHeaders,
 } from './middleware/sync.middleware';
+
 import { corsOptions } from './config/corsConfig';
 import './config/passport-config';
 import dotenv from 'dotenv';
@@ -88,16 +90,18 @@ function configureExpressApp(): express.Application {
   app.use(cookieParser());
 
   // Sanitize data to prevent NoSQL injection
-  // app.use(mongoSanitize());
+  // Note: Using direct sanitize() call instead of middleware because req.query
+  // is a read-only getter in this Express version and the middleware crashes trying to reassign it.
+  app.use((req: any, _res: any, next: any) => {
+    if (req.body) mongoSanitize.sanitize(req.body);
+    if (req.params) mongoSanitize.sanitize(req.params);
+    next();
+  });
 
   // Encryption Middleware (supports both full payload and field-level encryption)
   app.use(advancedEncryptionMiddleware);
 
-  // Sync middleware
-  app.use(trackSyncOperation);
-  app.use(validateSyncData);
-  app.use(rateLimitSync(100, 15 * 60 * 1000)); // 100 requests per 15 minutes
-  app.use(addSyncHeaders);
+  // Sync middleware is scoped to /v1/sync/* routes only (see routes/index.ts)
 
   // API Documentation (Swagger UI)
   app.use(
@@ -124,7 +128,7 @@ function configureExpressApp(): express.Application {
     res.status(404).json({ success: false, message: 'Endpoint not found' });
   });
 
-  app.use(errorHandler);
+  app.use(enhancedErrorHandler);
 
   return app;
 }

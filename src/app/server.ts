@@ -2,6 +2,10 @@ import logger from './services/logger.service';
 import { config } from 'dotenv';
 import { connectToDB } from './db';
 import { configureExpressApp } from './app';
+import { planService } from './services/plan.service';
+
+import { createServer } from 'http';
+import { initializeSocketService } from './services/socket.service';
 
 const DEFAULT_PORT = 3000;
 
@@ -48,11 +52,18 @@ async function startServer() {
     validateEnvironmentVariables();
 
     await connectToDB();
+    
+    // Seed default subscription plans
+    await planService.seedDefaultPlans();
 
     const app = configureExpressApp();
+    const httpServer = createServer(app);
+    
+    // Initialize WebSockets
+    initializeSocketService(httpServer);
 
     const port = process.env.PORT ?? DEFAULT_PORT;
-    app.listen(port, () => {
+    httpServer.listen(port, () => {
       logger.info(`[server]: Server is running at http://localhost:${port}`);
     });
   } catch (error) {

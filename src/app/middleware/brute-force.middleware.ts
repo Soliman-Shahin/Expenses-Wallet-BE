@@ -31,7 +31,8 @@ const defaultConfig: BruteForceConfig = {
   maxFailedAttempts: 5,
   lockoutDurationMs: 15 * 60 * 1000, // 15 minutes
   windowMs: 15 * 60 * 1000, // 15 minutes
-  progressiveDelay: true,
+  // Disable artificial delays locally — they caused 15s+ waits and client timeouts
+  progressiveDelay: process.env.NODE_ENV === 'production',
 };
 
 class BruteForceProtection {
@@ -100,7 +101,7 @@ class BruteForceProtection {
 
     // Progressive delay: 1s, 2s, 4s, 8s, 16s...
     const baseDelay = 1000; // 1 second
-    const maxDelay = 30000; // 30 seconds max
+    const maxDelay = 10000; // Keep below typical client timeout (15s)
     const delay = Math.min(baseDelay * Math.pow(2, attemptCount - 1), maxDelay);
 
     return delay;
@@ -131,6 +132,10 @@ class BruteForceProtection {
       // Check email-based lockout
       if (email) {
         const emailAttempt = this.getAttempt(email, this.emailAttempts);
+        if (emailAttempt.lockedUntil && emailAttempt.lockedUntil <= now) {
+          emailAttempt.count = 0;
+          delete emailAttempt.lockedUntil;
+        }
         if (emailAttempt.lockedUntil && emailAttempt.lockedUntil > now) {
           const remainingTime = Math.ceil(
             (emailAttempt.lockedUntil - now) / 1000
@@ -142,14 +147,6 @@ class BruteForceProtection {
             'ACCOUNT_LOCKED',
             { remainingTime, type: 'email' }
           );
-        }
-
-        // Apply progressive delay
-        if (emailAttempt.count > 0) {
-          const delay = this.calculateDelay(emailAttempt.count);
-          if (delay > 0) {
-            await new Promise((resolve) => setTimeout(resolve, delay));
-          }
         }
       }
 

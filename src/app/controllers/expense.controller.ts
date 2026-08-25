@@ -3,13 +3,27 @@ import { Response } from 'express';
 import { sendError, sendSuccess } from '../shared/helper';
 import { CustomRequest } from '../types/custom-request';
 import { ExpenseService } from '../services/expense.service';
+import { AppError } from '../shared/errors';
 
+// Create a new expense/transaction
+// Note: Plan limit enforcement is handled upstream by:
+//   verifyAccessToken -> attachPlanContext -> checkPlanLimit('transactions')
 export const createExpense = async (req: CustomRequest, res: Response) => {
   try {
     const user = req.user_id || '';
-    const expense = await ExpenseService.createExpense(req.body, user);
+    const expense = await ExpenseService.createExpense(req.body, user, req);
     sendSuccess(res, expense, 'Expense created successfully');
   } catch (error: any) {
+    // Propagate AppError subclasses (PlanLimitError, etc.) with correct status code
+    if (error instanceof AppError) {
+      return sendError(
+        res,
+        error.message,
+        error.statusCode,
+        error.code,
+        error.details
+      );
+    }
     sendError(res, error.message);
   }
 };
@@ -82,7 +96,8 @@ export const updateExpense = async (req: CustomRequest, res: Response) => {
     const updatedExpense = await ExpenseService.updateExpense(
       id,
       req.body,
-      user
+      user,
+      req
     );
     if (!updatedExpense) {
       return sendError(res, 'Expense not found', 404);
@@ -97,7 +112,7 @@ export const deleteExpense = async (req: CustomRequest, res: Response) => {
   try {
     const id = (req.params.id as string) || '';
     const user = req.user_id || '';
-    const deletedExpense = await ExpenseService.deleteExpense(id, user);
+    const deletedExpense = await ExpenseService.deleteExpense(id, user, req);
     if (!deletedExpense) {
       return sendError(res, 'Expense not found', 404);
     }

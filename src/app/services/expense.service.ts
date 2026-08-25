@@ -1,8 +1,57 @@
 import { Expense } from '../models/expense.model';
 import mongoose from 'mongoose';
+import { getSocketService } from './socket.service';
+import { Request } from 'express';
+import { auditLogService } from './audit-log.service';
+import { AuditAction } from '../models/audit-log.model';
+import logger from './logger.service';
 
 export class ExpenseService {
-  static async createExpense(data: any, userId: string) {
+  private static async notifyAndAudit(params: {
+    req?: Request;
+    actorId?: string;
+    action: AuditAction;
+    notification: { title: string; message: string; type: 'info' | 'success' | 'warn' | 'error' };
+    changes?: Record<string, any>;
+    targetUserId?: string;
+    targetResourceType?: string;
+    targetResourceId?: string;
+  }) {
+    let auditLogId: string | undefined;
+
+    try {
+      const auditLog = await auditLogService.log({
+        req: params.req,
+        actorId: params.actorId,
+        action: params.action,
+        targetUserId: params.targetUserId,
+        targetResourceType: params.targetResourceType,
+        targetResourceId: params.targetResourceId,
+        changes: params.changes
+      });
+      auditLogId = auditLog._id.toString();
+    } catch (err) {
+      logger.error('Failed to log audit event in notifyAndAudit', err as Error);
+    }
+
+    try {
+      const socketService = getSocketService();
+      socketService.broadcastNotification({
+        title: params.notification.title,
+        message: params.notification.message,
+        type: params.notification.type,
+        action: params.action,
+        actor: { id: params.actorId },
+        resource: { type: params.targetResourceType, id: params.targetResourceId, name: params.targetResourceType },
+        changes: params.changes,
+        auditLogId: auditLogId
+      });
+    } catch (err) {
+      logger.error('Failed to broadcast socket notification in notifyAndAudit', err as Error);
+    }
+  }
+
+  static async createExpense(data: any, userId: string, req?: Request) {
     const expense = new Expense({
       ...data,
       user: userId,
@@ -11,7 +60,24 @@ export class ExpenseService {
       _version: 1,
       _isDeleted: false,
     });
-    return expense.save();
+    const saved = await expense.save();
+
+    await this.notifyAndAudit({
+      req,
+      actorId: userId,
+      action: AuditAction.EXPENSE_CREATED,
+      notification: {
+        title: 'Expense Created',
+        message: `A new expense was created.`,
+        type: 'success'
+      },
+      changes: data,
+      targetUserId: userId,
+      targetResourceType: 'Expense',
+      targetResourceId: saved._id.toString()
+    });
+
+    return saved;
   }
 
   static async getExpenses(
@@ -159,13 +225,13 @@ export class ExpenseService {
     }).populate('category');
   }
 
-  static async updateExpense(id: string, data: any, userId: string) {
+  static async updateExpense(id: string, data: any, userId: string, req?: Request) {
     const expense = await Expense.findOne({ _id: id, user: userId });
     if (!expense) return null;
 
     const currentVersion = expense._version || 0;
 
-    return Expense.findOneAndUpdate(
+    const updated = await Expense.findOneAndUpdate(
       { _id: id, user: userId },
       {
         ...data,
@@ -175,11 +241,28 @@ export class ExpenseService {
       },
       { new: true, runValidators: true }
     ).populate('category');
+
+    await this.notifyAndAudit({
+      req,
+      actorId: userId,
+      action: AuditAction.EXPENSE_UPDATED,
+      notification: {
+        title: 'Expense Updated',
+        message: `An expense was updated.`,
+        type: 'info'
+      },
+      changes: data,
+      targetUserId: userId,
+      targetResourceType: 'Expense',
+      targetResourceId: id
+    });
+
+    return updated;
   }
 
-  static async deleteExpense(id: string, userId: string) {
+  static async deleteExpense(id: string, userId: string, req?: Request) {
     // Soft delete for sync purposes
-    return Expense.findOneAndUpdate(
+    const deleted = await Expense.findOneAndUpdate(
       { _id: id, user: userId },
       {
         _isDeleted: true,
@@ -188,6 +271,22 @@ export class ExpenseService {
       },
       { new: true }
     );
+
+    await this.notifyAndAudit({
+      req,
+      actorId: userId,
+      action: AuditAction.EXPENSE_DELETED,
+      notification: {
+        title: 'Expense Deleted',
+        message: `An expense was deleted.`,
+        type: 'warn'
+      },
+      targetUserId: userId,
+      targetResourceType: 'Expense',
+      targetResourceId: id
+    });
+
+    return deleted;
   }
 
   static async getExpenseTotals(

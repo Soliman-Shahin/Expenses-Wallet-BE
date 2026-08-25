@@ -227,6 +227,68 @@ export class InvalidOperationError extends AppError {
   }
 }
 
+// ==================== Plan & Subscription Errors ====================
+
+/**
+ * Thrown when a user tries to perform an action that exceeds their plan limits.
+ * e.g. creating a 6th category on the Free plan which allows only 5.
+ */
+export class PlanLimitError extends AppError {
+  constructor(
+    limitType: string,
+    currentCount: number,
+    maxAllowed: number,
+    planSlug: string
+  ) {
+    const message = `Plan limit reached: you have used ${currentCount}/${maxAllowed} ${limitType} on the ${planSlug} plan. Upgrade to get more.`;
+    super(message, 403, 'PLAN_LIMIT_EXCEEDED', true, {
+      limitType,
+      currentCount,
+      maxAllowed,
+      planSlug,
+    });
+    Object.setPrototypeOf(this, PlanLimitError.prototype);
+  }
+}
+
+/**
+ * Thrown when a user tries to access a feature not included in their plan.
+ */
+export class PlanFeatureError extends AppError {
+  constructor(feature: string, requiredPlan: string) {
+    const message = `The "${feature}" feature is not available on your current plan. Upgrade to ${requiredPlan} or higher to unlock it.`;
+    super(message, 403, 'PLAN_FEATURE_UNAVAILABLE', true, {
+      feature,
+      requiredPlan,
+    });
+    Object.setPrototypeOf(this, PlanFeatureError.prototype);
+  }
+}
+
+/**
+ * Thrown when a user's subscription has expired and they try to use a paid feature.
+ */
+export class PlanExpiredError extends AppError {
+  constructor(expiredAt?: Date) {
+    const message = expiredAt
+      ? `Your subscription expired on ${expiredAt.toLocaleDateString()}. Please renew to continue using premium features.`
+      : 'Your subscription has expired. Please renew to continue using premium features.';
+    super(message, 403, 'PLAN_EXPIRED', true, { expiredAt });
+    Object.setPrototypeOf(this, PlanExpiredError.prototype);
+  }
+}
+
+/**
+ * Thrown when a user tries to access a resource that requires a specific permission.
+ */
+export class PermissionDeniedError extends AppError {
+  constructor(permission: string) {
+    const message = `Permission denied: the "${permission}" permission is required to perform this action.`;
+    super(message, 403, 'PERMISSION_DENIED', true, { permission });
+    Object.setPrototypeOf(this, PermissionDeniedError.prototype);
+  }
+}
+
 // ==================== Helper Functions ====================
 
 /**
@@ -303,6 +365,12 @@ export default {
   InvalidFileTypeError,
   InsufficientPermissionsError,
   InvalidOperationError,
+  // Plan & subscription errors
+  PlanLimitError,
+  PlanFeatureError,
+  PlanExpiredError,
+  PermissionDeniedError,
+  // Helpers
   isOperationalError,
   toAppError,
 };

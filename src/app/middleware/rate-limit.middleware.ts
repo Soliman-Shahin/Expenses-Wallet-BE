@@ -122,11 +122,11 @@ export function createRateLimiter(config: RateLimitConfig) {
 
 /**
  * Strict rate limiter for auth endpoints (login, signup)
- * 5 requests per 15 minutes
+ * Relaxed in development to avoid blocking local testing
  */
 export const strictAuthRateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  maxRequests: 5,
+  maxRequests: process.env.NODE_ENV === 'production' ? 5 : 100,
   message: 'Too many authentication attempts, please try again later',
 });
 
