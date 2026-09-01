@@ -7,3 +7,6 @@ export * from './plan.model';
 export * from './subscription.model';
 export * from './temporary-permission.model';
 export * from './role.model';
+export * from './device-push-token.model';
+export * from './notification.model';
+export * from './user-notification.model';

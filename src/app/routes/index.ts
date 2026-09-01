@@ -13,6 +13,7 @@ import temporaryPermissionRoutes from './temporary-permission.route';
 import permissionMatrixRoutes from './permission-matrix.route';
 import roleRoutes from './role.routes';
 import notificationRoutes from './notification.route';
+import pushDeviceRoutes from './push-device.route';
 import {
   trackSyncOperation,
   validateSyncData,
@@ -46,5 +47,6 @@ router.use('/temporary-permissions', temporaryPermissionRoutes);
 router.use('/permissions', permissionMatrixRoutes);
 router.use('/roles', roleRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/push', pushDeviceRoutes);
 
 export default router;
