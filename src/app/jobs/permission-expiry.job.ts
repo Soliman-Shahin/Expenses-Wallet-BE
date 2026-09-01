@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import cron, { type ScheduledTask } from 'node-cron';
 import { temporaryPermissionService } from '../services/temporary-permission.service';
 import logger from '../services/logger.service';
 
@@ -9,7 +9,7 @@ import logger from '../services/logger.service';
  * Deactivates expired permissions and invalidates user caches.
  */
 class PermissionExpiryJob {
-  private task: cron.ScheduledTask | null = null;
+  private task: ScheduledTask | null = null;
 
   /**
    * Start the cron job
