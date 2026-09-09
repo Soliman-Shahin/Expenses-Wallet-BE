@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { NextFunction, Response } from 'express';
 import { User, UserDocument } from '../models';
 import { CustomRequest } from '../types/custom-request';
@@ -28,7 +29,8 @@ export const verifySession = async (
 
     const isSessionValid = user.sessions.some(
       (session: any) =>
-        session.token === refreshToken &&
+        session.token ===
+          crypto.createHash('sha256').update(refreshToken).digest('hex') &&
         !User.hasRefreshTokenExpired(session.expiresAt)
     );
 

@@ -1,6 +1,5 @@
 import { Schema, model, Document, Model } from 'mongoose';
 import _ from 'lodash';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { config } from 'dotenv';
 import { PlanSlug } from '../types/plan.types';
@@ -37,20 +36,23 @@ export const ROLE_WEIGHTS: Record<UserRole, number> = {
 /**
  * Checks if the actor has permission to manage (edit/delete) the target role.
  */
-export function canManageTargetRole(actorRole: UserRole, targetRole: UserRole): boolean {
+export function canManageTargetRole(
+  actorRole: UserRole,
+  targetRole: UserRole
+): boolean {
   const actorWeight = ROLE_WEIGHTS[actorRole] ?? 0;
   const targetWeight = ROLE_WEIGHTS[targetRole] ?? 0;
-  
+
   // Actor must have at least Admin privileges
   if (actorWeight < ROLE_WEIGHTS[UserRole.Admin]) {
     return false;
   }
-  
+
   // SuperAdmin can manage anyone
   if (actorWeight >= ROLE_WEIGHTS[UserRole.SuperAdmin]) {
     return true;
   }
-  
+
   // Admin can manage anyone EXCEPT SuperAdmin
   return targetWeight < ROLE_WEIGHTS[UserRole.SuperAdmin];
 }
@@ -58,20 +60,23 @@ export function canManageTargetRole(actorRole: UserRole, targetRole: UserRole): 
 /**
  * Checks if the actor has permission to assign a specific role.
  */
-export function canAssignRole(actorRole: UserRole, roleToAssign: UserRole): boolean {
+export function canAssignRole(
+  actorRole: UserRole,
+  roleToAssign: UserRole
+): boolean {
   const actorWeight = ROLE_WEIGHTS[actorRole] ?? 0;
   const assignWeight = ROLE_WEIGHTS[roleToAssign] ?? 0;
-  
+
   // Actor must have at least Admin privileges
   if (actorWeight < ROLE_WEIGHTS[UserRole.Admin]) {
     return false;
   }
-  
+
   // SuperAdmin can assign any role
   if (actorWeight >= ROLE_WEIGHTS[UserRole.SuperAdmin]) {
     return true;
   }
-  
+
   // Admin can assign roles up to Admin (not SuperAdmin)
   return assignWeight <= ROLE_WEIGHTS[UserRole.Admin];
 }
@@ -230,20 +235,12 @@ UserSchema.methods.toJSON = function () {
   return _.omit(userObject, ['password', 'sessions']);
 };
 
-UserSchema.methods.generateAccessAuthToken =
-  async function (): Promise<string> {
-    try {
-      // Ensure the payload is an object, secret is a string, and options are correctly typed
-      const token: string = jwt.sign(
-        { _id: this._id.toHexString() },
-        jwtSecret,
-        { expiresIn: '1h', algorithm: 'HS256' } // SignOptions including algorithm
-      );
-      return token;
-    } catch (error) {
-      throw new Error(`JWT Sign Error: ${error}`);
-    }
-  };
+UserSchema.methods.generateAccessAuthToken = async function (
+  this: UserDocument
+): Promise<string> {
+  const { UserService } = await import('../services/user.service');
+  return UserService.generateAccessToken(this);
+};
 
 UserSchema.methods.createRefreshToken = async function (): Promise<string> {
   const buf = crypto.randomBytes(TOKEN_SETTINGS.LENGTH);
@@ -254,7 +251,8 @@ UserSchema.methods.createSession = async function (
   this: UserDocument
 ): Promise<string> {
   const refreshToken = await this.createRefreshToken();
-  await saveSessionToDatabase(this, refreshToken);
+  const { UserService } = await import('../services/user.service');
+  await UserService.addRefreshToken(this, refreshToken);
   return refreshToken;
 };
 
@@ -265,56 +263,18 @@ UserSchema.statics.findByIdAndToken = async function (
   id: string,
   token: string
 ): Promise<UserDocument | null> {
-  return this.findOne({ _id: id, 'sessions.token': token });
+  return this.findOne({
+    _id: id,
+    'sessions.token': crypto.createHash('sha256').update(token).digest('hex'),
+    _isDeleted: { $ne: true },
+    isActive: { $ne: false },
+  });
 };
 
 UserSchema.statics.hasRefreshTokenExpired = function (
   expiresAt: number
 ): boolean {
   return Date.now() / 1000 > expiresAt;
-};
-
-/* HELPER METHODS */
-const saveSessionToDatabase = async (
-  user: UserDocument,
-  refreshToken: string
-): Promise<string> => {
-  // This function saves a session to the database
-  // It takes the user document and the refresh token as parameters
-  // It updates the user document with the refresh token and its expiration time
-  // It returns a promise that resolves with the refresh token or rejects with an error
-
-  try {
-    const expiresAt = generateRefreshTokenExpiryTime();
-
-    // Initialize user.sessions as an empty array
-    user.sessions = [];
-
-    user.sessions.push({ token: refreshToken, expiresAt });
-
-    await user.save();
-
-    // Returned the refresh token directly
-    return refreshToken;
-  } catch (error) {
-    throw error;
-  }
-};
-
-const generateRefreshTokenExpiryTime = () => {
-  // This function calculates the expiration time of a refresh token
-  // It returns the expiration time as a timestamp in seconds
-
-  // Used a constant for the number of days until the token expires
-  const DAYS_UNTIL_EXPIRE = 10;
-  // Used a mathematical expression to calculate the number of seconds
-  const secondsUntilExpire = DAYS_UNTIL_EXPIRE * 24 * 60 * 60;
-  // Used a constant for the conversion factor from milliseconds to seconds
-  const MILLISECONDS_TO_SECONDS = 1000;
-  // Divided the current time by the conversion factor
-  const currentTimeInSeconds = Date.now() / MILLISECONDS_TO_SECONDS;
-  // Added the number of seconds until expire to the current time
-  return currentTimeInSeconds + secondsUntilExpire;
 };
 
 // Create the user model using generics

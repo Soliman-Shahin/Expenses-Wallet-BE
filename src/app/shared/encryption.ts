@@ -8,7 +8,7 @@ export const encrypt = (data: any): string => {
   try {
     return CryptoJS.AES.encrypt(JSON.stringify(data), KEY).toString();
   } catch (e) {
-    logger.error('Encryption failed', e as Error);
+    logger.warn('Cryptographic operation failed');
     return '';
   }
 };
@@ -20,7 +20,7 @@ export const decrypt = (ciphertext: string): any => {
     const decryptedData = bytes.toString(CryptoJS.enc.Utf8);
     return JSON.parse(decryptedData);
   } catch (e) {
-    logger.error('Decryption failed', e as Error);
+    logger.warn('Cryptographic operation failed');
     return null;
   }
 };

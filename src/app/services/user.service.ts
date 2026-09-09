@@ -5,14 +5,16 @@ import jwt from 'jsonwebtoken';
 import { config } from 'dotenv';
 config();
 
-const ACCESS_TOKEN_SECRET =
-  process.env.ACCESS_TOKEN_SECRET || 'default_access_secret';
-const REFRESH_TOKEN_SECRET =
-  process.env.REFRESH_TOKEN_SECRET || 'default_refresh_secret';
-const REFRESH_TOKEN_EXPIRY_DAYS = parseInt(
+const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET!;
+const configuredRefreshDays = parseInt(
   process.env.REFRESH_TOKEN_EXPIRY_DAYS || '10',
   10
 );
+
+const REFRESH_TOKEN_EXPIRY_DAYS =
+  Number.isFinite(configuredRefreshDays) && configuredRefreshDays > 0
+    ? configuredRefreshDays
+    : 10;
 
 // Hash a refresh token before storing in DB
 function hashToken(token: string): string {
@@ -51,6 +53,7 @@ export class UserService {
     return jwt.sign({ _id: user._id }, ACCESS_TOKEN_SECRET, {
       expiresIn: '1h',
       algorithm: 'HS256',
+      jwtid: crypto.randomUUID(),
     });
   }
 
@@ -59,7 +62,7 @@ export class UserService {
     return crypto.randomBytes(64).toString('hex');
   }
 
-  // Add a refresh token (hashed) to the user, remove expired/used tokens
+  // Add a hashed refresh credential without replacing another device session
   static async addRefreshToken(
     user: UserDocument,
     refreshToken: string
@@ -67,11 +70,23 @@ export class UserService {
     const hashed = hashToken(refreshToken);
     const expiresAt =
       Math.floor(Date.now() / 1000) + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
-    user.sessions = (user.sessions || []).filter(
-      (s) => s.expiresAt > Date.now() / 1000
+    if (user._isDeleted || user.isActive === false)
+      throw new Error('Account unavailable');
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $pull: {
+          sessions: { expiresAt: { $lte: Math.floor(Date.now() / 1000) } },
+        },
+      }
     );
-    user.sessions.push({ token: hashed, expiresAt });
-    await user.save();
+    const result = await User.updateOne(
+      { _id: user._id, _isDeleted: { $ne: true }, isActive: { $ne: false } },
+      {
+        $push: { sessions: { token: hashed, expiresAt } },
+      }
+    );
+    if (!result.matchedCount) throw new Error('Account unavailable');
   }
 
   // Remove a refresh token (on logout or rotation)
@@ -80,8 +95,10 @@ export class UserService {
     refreshToken: string
   ): Promise<void> {
     const hashed = hashToken(refreshToken);
-    user.sessions = (user.sessions || []).filter((s) => s.token !== hashed);
-    await user.save();
+    await User.updateOne(
+      { _id: user._id },
+      { $pull: { sessions: { token: hashed } } }
+    );
   }
 
   // Find user by refresh token (hashed)
@@ -90,6 +107,52 @@ export class UserService {
   ): Promise<UserDocument | null> {
     const hashed = hashToken(refreshToken);
     return User.findOne({ 'sessions.token': hashed });
+  }
+
+  // One MongoDB update consumes the old credential and replaces it atomically.
+  static async rotateRefreshToken(
+    refreshToken: string
+  ): Promise<{ accessToken: string; refreshToken: string } | null> {
+    if (!/^[a-f0-9]{128}$/.test(refreshToken)) return null;
+    // Read-only compatibility with pre-AUTH.1 Google sessions. Rotation replaces
+    // the legacy plaintext value with a hash; no issuance path writes plaintext.
+    const nextToken = await this.generateRefreshToken();
+    const now = Math.floor(Date.now() / 1000);
+    const user = await User.findOneAndUpdate(
+      {
+        _isDeleted: { $ne: true },
+        isActive: { $ne: false },
+        sessions: {
+          $elemMatch: {
+            token: { $in: [hashToken(refreshToken), refreshToken] },
+            expiresAt: { $gt: now },
+          },
+        },
+      },
+      {
+        $set: {
+          'sessions.$.token': hashToken(nextToken),
+          'sessions.$.expiresAt': now + REFRESH_TOKEN_EXPIRY_DAYS * 86400,
+        },
+      },
+      { returnDocument: 'after' }
+    );
+    if (!user) return null;
+    return {
+      accessToken: await this.generateAccessToken(user),
+      refreshToken: nextToken,
+    };
+  }
+
+  static async revokeRefreshToken(refreshToken: string): Promise<void> {
+    if (!/^[a-f0-9]{128}$/.test(refreshToken)) return;
+    const accepted = [hashToken(refreshToken), refreshToken];
+    await User.updateOne(
+      { 'sessions.token': { $in: accepted } },
+      {
+        $pull: { sessions: { token: { $in: accepted } } },
+      }
+    );
   }
 
   // Remove all refresh tokens (on password change, etc)

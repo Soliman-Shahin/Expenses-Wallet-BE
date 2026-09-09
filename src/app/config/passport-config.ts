@@ -72,7 +72,7 @@ passport.use(
         return done(null, newUser);
       } catch (err: unknown) {
         const error = err as Error;
-        logger.error('Google OAuth error:', error);
+        logger.error('Google OAuth failed');
         done(error);
       }
     }

@@ -37,6 +37,8 @@ const defaultOptions: EncryptionOptions = {
   includePaths: [
     '/v1/user/login',
     '/v1/user/signup',
+    '/v1/user/refresh-token',
+    '/v1/user/logout',
     '/v1/user/me',
     '/v1/user/auth/google/native',
     '/v1/user/auth/facebook/native',
@@ -103,10 +105,6 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
     // DECRYPT INCOMING REQUEST BODY
     // ============================================
     if (req.body && typeof req.body === 'object') {
-      logger.info(
-        `🔍 [Encryption Middleware] Request body: ${JSON.stringify(req.body).substring(0, 200)}`
-      );
-
       try {
         // Check if Frontend sent full payload encryption: { data: "encrypted_string" }
         if (
@@ -115,33 +113,15 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
           !req.body.email &&
           !req.body.password
         ) {
-          logger.info('🔍 [Encryption Middleware] Detected encrypted payload');
-          logger.info(
-            '🔍 [Encryption Middleware] Data preview:',
-            req.body.data.substring(0, 50)
-          );
-
           // Full payload encryption from Frontend (CryptoJS format)
           try {
             // Check if it's CryptoJS format (from Frontend)
             if (isCryptoJSFormat(req.body.data)) {
-              logger.info(
-                '✅ [Encryption Middleware] CryptoJS format detected'
-              );
               const decrypted = decryptCryptoJS(req.body.data);
               if (decrypted) {
                 req.body = decrypted;
-                logger.info(
-                  '✅ [Encryption Middleware] CryptoJS decryption successful'
-                );
-                logger.info(
-                  `🔍 [Encryption Middleware] Decrypted body: ${JSON.stringify(req.body)}`
-                );
               }
             } else {
-              logger.info(
-                '🔍 [Encryption Middleware] Trying AES-256-GCM format'
-              );
               // Try AES-256-GCM format (advanced encryption)
               const decrypted = decryptAdvanced(req.body.data);
               if (decrypted) {
@@ -149,34 +129,18 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
                   typeof decrypted === 'string'
                     ? JSON.parse(decrypted)
                     : decrypted;
-                logger.info(
-                  '✅ [Encryption Middleware] Advanced decryption successful'
-                );
               }
             }
           } catch (decryptError: unknown) {
-            logger.error(
-              '❌ [Encryption Middleware] Full payload decryption failed:',
-              decryptError as Error
-            );
-            const err = decryptError as Error;
-            logger.error(
-              `❌ [Encryption Middleware] Error details: ${err.message || 'Unknown error'}`
-            );
+            logger.warn('Request decryption failed');
+
             // Fall through to field-level decryption
           }
         } else {
-          logger.info(
-            '🔍 [Encryption Middleware] No encrypted payload detected, using field-level'
-          );
           // Field-level encryption (original behavior)
           req.body = decryptFieldsDeep(req.body, SENSITIVE_FIELDS);
         }
       } catch (error) {
-        logger.error(
-          '❌ [Encryption Middleware] Request decryption error:',
-          error as Error
-        );
         // Continue with original body if decryption fails
       }
     }
@@ -188,7 +152,7 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
 
     res.json = function (body: any): Response {
       // TEMPORARILY DISABLED - Response encryption off for debugging
-      logger.info('📤 [Encryption Middleware] Sending unencrypted response');
+
       return originalJson(body);
 
       /* Original encryption code - commented out for debugging

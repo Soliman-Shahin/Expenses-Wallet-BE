@@ -90,7 +90,7 @@ const signUp = async (req: CustomRequest, res: Response) => {
       path: req.path,
     };
     const err = error as ErrorWithContext;
-    logger.error('Signup failed', err, context);
+    logger.error('Signup failed', undefined, context);
     sendError(
       res,
       err.message || 'Signup failed',
@@ -176,50 +176,38 @@ const userAccessToken = async (req: CustomRequest, res: Response) => {
 // POST /refresh-token
 const refreshToken = async (req: CustomRequest, res: Response) => {
   try {
-    const { refreshToken } = req.body;
-    if (!refreshToken) {
+    const credential = req.body?.refreshToken;
+    if (typeof credential !== 'string')
       return sendError(res, 'Refresh token required', 400);
-    }
-    // Find user by hashed refresh token
-    const user = await UserService.findByRefreshToken(refreshToken);
-    if (!user) {
-      return sendError(res, 'Invalid refresh token', 401);
-    }
-    // Find the session
-    const hashed = require('crypto')
-      .createHash('sha256')
-      .update(refreshToken)
-      .digest('hex');
-    const session = user.sessions.find((s) => s.token === hashed);
-    if (!session) {
-      return sendError(res, 'Session not found', 401);
-    }
-    // Check if expired
-    if (session.expiresAt < Date.now() / 1000) {
-      await UserService.removeRefreshToken(user, refreshToken);
-      return sendError(res, 'Refresh token expired', 401);
-    }
-    // Rotate refresh token: remove old, add new
-    await UserService.removeRefreshToken(user, refreshToken);
-    const newRefreshToken = await UserService.generateRefreshToken();
-    await UserService.addRefreshToken(user, newRefreshToken);
-    // Generate new access token
-    const accessToken = await UserService.generateAccessToken(user);
-    // Expose in headers as well
-    res.setHeader('access-token', accessToken);
-    res.setHeader('refresh-token', newRefreshToken);
-    sendSuccess(
-      res,
-      { accessToken, refreshToken: newRefreshToken },
-      'Token refreshed successfully'
-    );
-  } catch (error: unknown) {
-    const err = error as Error;
-    sendError(res, err.message || 'Token refresh failed', 401);
+    const tokens = await UserService.rotateRefreshToken(credential);
+    if (!tokens)
+      return sendError(
+        res,
+        'Invalid or expired session',
+        401,
+        'SESSION_INVALID'
+      );
+    res.setHeader('access-token', tokens.accessToken);
+    res.setHeader('refresh-token', tokens.refreshToken);
+    return sendSuccess(res, tokens, 'Token refreshed successfully');
+  } catch {
+    return sendError(res, 'Session renewal temporarily unavailable', 503);
   }
 };
 
-export { login, signUp, userAccessToken, refreshToken };
+const logout = async (req: CustomRequest, res: Response) => {
+  try {
+    const credential = req.body?.refreshToken;
+    if (typeof credential !== 'string')
+      return sendError(res, 'Refresh token required', 400);
+    await UserService.revokeRefreshToken(credential);
+    return sendSuccess(res, {}, 'Logged out');
+  } catch {
+    return sendError(res, 'Session revocation temporarily unavailable', 503);
+  }
+};
+
+export { login, signUp, userAccessToken, refreshToken, logout };
 
 // GET /user/me
 const getMe = async (

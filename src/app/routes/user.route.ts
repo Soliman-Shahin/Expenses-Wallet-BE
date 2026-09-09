@@ -9,6 +9,7 @@ import {
   signUp,
   userAccessToken,
   refreshToken,
+  logout,
   getMe,
   updateMe,
   uploadAvatar,
@@ -148,23 +149,17 @@ router.post(
   validateRequestWithZod(loginSchema),
   login
 );
-router.post('/refresh-token', refreshToken);
+router.post('/refresh-token', strictAuthRateLimiter, refreshToken);
+router.post('/logout', strictAuthRateLimiter, logout);
 
 // Native Google Sign-In (Android/iOS) using idToken from Capacitor plugin
 router.post('/auth/google/native', async (req: Request, res: Response) => {
   try {
-    logger.debug(
-      '[Google Native] Request body:',
-      JSON.stringify(req.body).substring(0, 200)
-    );
-
     const { idToken } = req.body || {};
     if (!idToken || typeof idToken !== 'string') {
       logger.error('[Google Native] Missing or invalid idToken');
       return res.status(400).json({ message: 'idToken is required' });
     }
-
-    logger.info('[Google Native] idToken received, length:', idToken.length);
 
     // Verify idToken with Google tokeninfo (with fetch fallback)
     const url = `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(
@@ -208,7 +203,7 @@ router.post('/auth/google/native', async (req: Request, res: Response) => {
         });
       }
     } catch (e) {
-      logger.error('[google/native] tokeninfo fetch error', e);
+      logger.error('Google token verification unavailable');
       return res.status(500).json({ message: 'Token verification failed' });
     }
 
@@ -271,6 +266,8 @@ router.post('/auth/google/native', async (req: Request, res: Response) => {
       if (mutated) await (user as any).save();
     }
 
+    if (user!._isDeleted || user!.isActive === false)
+      return res.status(401).json({ message: 'Account unavailable' });
     const refreshToken = await (user as any).createSession();
     const accessToken = await (user as any).generateAccessAuthToken();
 
@@ -287,8 +284,8 @@ router.post('/auth/google/native', async (req: Request, res: Response) => {
     );
   } catch (err: unknown) {
     const error = err as Error;
-    logger.error('[Google Native] Authentication error:', error);
-    logger.error('[Google Native] Error stack:', error.stack);
+    logger.error('Google authentication failed');
+
     return res.status(500).json({
       success: false,
       error: {
@@ -366,7 +363,7 @@ router.get(
 
       return res.redirect(redirectUrl);
     } catch (err) {
-      logger.error('[Google OAuth Callback] Error:', err);
+      logger.error('Google OAuth callback failed');
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
       return res.redirect(`${frontendUrl}/auth/login?error=oauth_failed`);
     }

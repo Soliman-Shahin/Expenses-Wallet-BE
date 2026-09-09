@@ -36,7 +36,12 @@ export const enhancedErrorHandler = (
   };
 
   // Log error based on type
-  if (appError.isOperational) {
+  if (req.path.startsWith('/v1/user/')) {
+    logger.warn('Authentication request failed', context, {
+      code: appError.code,
+      statusCode: appError.statusCode,
+    });
+  } else if (appError.isOperational) {
     // Operational errors (expected) - log as warning
     logger.warn(`Operational error: ${appError.message}`, context, {
       code: appError.code,
