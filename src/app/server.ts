@@ -52,13 +52,13 @@ async function startServer() {
     validateEnvironmentVariables();
 
     await connectToDB();
-    
+
     // Seed default subscription plans
     await planService.seedDefaultPlans();
 
     const app = configureExpressApp();
     const httpServer = createServer(app);
-    
+
     // Initialize WebSockets
     initializeSocketService(httpServer);
 
