@@ -161,4 +161,8 @@ export class UserService {
     user.sessions = [];
     await user.save();
   }
+
+  static hashPasswordResetToken(token: string): string {
+    return hashToken(token);
+  }
 }

@@ -126,6 +126,9 @@ interface UserDocument extends Document {
   privacyVersion?: string;
   role: string;
   sessions: IUserSession[];
+  passwordResetTokenHash?: string;
+  passwordResetExpiresAt?: Date;
+  passwordResetRequestedAt?: Date;
   isActive?: boolean;
   _isDeleted?: boolean;
   // ── Subscription / Plan ────────────────────────────────────────────────────
@@ -202,6 +205,9 @@ const UserSchema = new Schema<UserDocument>(
         expiresAt: { type: Number, required: true },
       },
     ],
+    passwordResetTokenHash: { type: String, select: false },
+    passwordResetExpiresAt: { type: Date, select: false },
+    passwordResetRequestedAt: { type: Date, select: false },
     isActive: { type: Boolean, default: true },
     _isDeleted: { type: Boolean, default: false },
     // ── Subscription / Plan Fields ─────────────────────────────────────────

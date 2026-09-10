@@ -13,6 +13,8 @@ import {
   getMe,
   updateMe,
   uploadAvatar,
+  requestPasswordReset,
+  resetPassword,
 } from '../controllers';
 import { verifyAccessToken } from '../middleware/access.middleware';
 import { validateRequestWithZod, verifySession } from '../middleware';
@@ -155,6 +157,8 @@ router.post(
 );
 router.post('/refresh-token', strictAuthRateLimiter, refreshToken);
 router.post('/logout', strictAuthRateLimiter, logout);
+router.post('/password/forgot', strictAuthRateLimiter, requestPasswordReset);
+router.post('/password/reset', strictAuthRateLimiter, resetPassword);
 
 // Native Google Sign-In (Android/iOS) using idToken from Capacitor plugin
 router.post('/auth/google/native', async (req: Request, res: Response) => {
@@ -242,12 +246,10 @@ router.post('/auth/google/native', async (req: Request, res: Response) => {
       try {
         assertNewAccountConsent(req.body);
       } catch (error: any) {
-        return res
-          .status(error.statusCode || 400)
-          .json({
-            success: false,
-            error: { message: error.message, code: error.code },
-          });
+        return res.status(error.statusCode || 400).json({
+          success: false,
+          error: { message: error.message, code: error.code },
+        });
       }
       user = new (User as any)({
         signupType: 'google',

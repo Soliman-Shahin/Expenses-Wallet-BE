@@ -15,6 +15,8 @@ import {
   ValidationError,
 } from '../shared/errors';
 import logger from '../services/logger.service';
+import crypto from 'crypto';
+import { MailService } from '../services/mail.service';
 import {
   UserCredentials,
   UserUpdatePayload,
@@ -216,7 +218,103 @@ const logout = async (req: CustomRequest, res: Response) => {
   }
 };
 
-export { login, signUp, userAccessToken, refreshToken, logout };
+const requestPasswordReset = async (req: CustomRequest, res: Response) => {
+  const generic =
+    'If an account exists for that email, a password reset link has been sent.';
+  try {
+    const email = String(req.body?.email || '')
+      .trim()
+      .toLowerCase();
+    if (!email) return sendSuccess(res, {}, generic);
+    const user = await User.findOne({
+      email,
+      _isDeleted: { $ne: true },
+      isActive: { $ne: false },
+    });
+    if (user) {
+      const raw = crypto.randomBytes(32).toString('hex');
+      const expires = new Date(Date.now() + 20 * 60 * 1000);
+      await User.updateOne(
+        { _id: user._id },
+        {
+          $set: {
+            passwordResetTokenHash: UserService.hashPasswordResetToken(raw),
+            passwordResetExpiresAt: expires,
+            passwordResetRequestedAt: new Date(),
+          },
+        }
+      );
+      try {
+        await MailService.sendPasswordReset(email, raw);
+      } catch {
+        await User.updateOne(
+          { _id: user._id },
+          {
+            $unset: {
+              passwordResetTokenHash: 1,
+              passwordResetExpiresAt: 1,
+              passwordResetRequestedAt: 1,
+            },
+          }
+        );
+      }
+    }
+    return sendSuccess(res, {}, generic);
+  } catch {
+    return sendSuccess(res, {}, generic);
+  }
+};
+
+const resetPassword = async (req: CustomRequest, res: Response) => {
+  try {
+    const { token, password } = req.body || {};
+    const validation = validatePassword(password);
+    if (typeof token !== 'string' || !validation.isValid)
+      return sendError(
+        res,
+        'Invalid or expired reset link',
+        400,
+        'PASSWORD_RESET_INVALID'
+      );
+    const user = await User.findOne({
+      passwordResetTokenHash: UserService.hashPasswordResetToken(token),
+      passwordResetExpiresAt: { $gt: new Date() },
+      _isDeleted: { $ne: true },
+      isActive: { $ne: false },
+    }).select('+passwordResetTokenHash +passwordResetExpiresAt');
+    if (!user)
+      return sendError(
+        res,
+        'Invalid or expired reset link',
+        400,
+        'PASSWORD_RESET_INVALID'
+      );
+    user.password = await bcrypt.hash(password, SALT_ROUNDS);
+    user.sessions = [];
+    user.passwordResetTokenHash = undefined;
+    user.passwordResetExpiresAt = undefined;
+    user.passwordResetRequestedAt = undefined;
+    await user.save();
+    return sendSuccess(res, {}, 'Password reset successfully');
+  } catch {
+    return sendError(
+      res,
+      'Unable to reset password right now',
+      503,
+      'PASSWORD_RESET_UNAVAILABLE'
+    );
+  }
+};
+
+export {
+  login,
+  signUp,
+  userAccessToken,
+  refreshToken,
+  logout,
+  requestPasswordReset,
+  resetPassword,
+};
 
 // GET /user/me
 const getMe = async (

@@ -7,6 +7,10 @@
 
 A secure, feature-rich backend API for the Expenses Wallet application with advanced encryption, comprehensive monitoring, and enterprise-grade security features.
 
+### Password recovery environment
+
+Configure `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `PASSWORD_RESET_URL` in the server environment. Reset links expire after 20 minutes. Raw reset tokens are never persisted or logged; newer requests supersede older tokens and a successful reset revokes all refresh sessions.
+
 ---
 
 ## ✨ Features
@@ -254,11 +258,11 @@ See **[SYNC_API.md](SYNC_API.md)** for full API documentation.
 ### Logging Levels
 
 ```typescript
-logger.debug("Detailed information"); // Development only
-logger.info("General information"); // Normal operations
-logger.warn("Warning message"); // Potential issues
-logger.error("Error occurred", error); // Errors
-logger.fatal("Critical error", error); // Fatal errors
+logger.debug('Detailed information'); // Development only
+logger.info('General information'); // Normal operations
+logger.warn('Warning message'); // Potential issues
+logger.error('Error occurred', error); // Errors
+logger.fatal('Critical error', error); // Fatal errors
 ```
 
 ### Performance Metrics
