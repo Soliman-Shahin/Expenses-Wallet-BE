@@ -22,6 +22,10 @@ import {
   UploadedFile,
   ErrorWithContext,
 } from '../types/user-types';
+import {
+  assertNewAccountConsent,
+  consentFields,
+} from '../config/consent.config';
 
 // Use higher salt rounds in production for better security
 const SALT_ROUNDS =
@@ -33,6 +37,7 @@ const SALT_ROUNDS =
 const signUp = async (req: CustomRequest, res: Response) => {
   try {
     const { email, password } = req.body as UserCredentials;
+    assertNewAccountConsent(req.body);
 
     // Validate password strength
     const passwordValidation = validatePassword(password);
@@ -58,7 +63,11 @@ const signUp = async (req: CustomRequest, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
     // Create user
-    const user = await UserService.createUser(email, hashedPassword);
+    const user = await UserService.createUser(
+      email,
+      hashedPassword,
+      consentFields()
+    );
 
     // Log user creation
     logger.info('New user registered', { userId: user._id.toString(), email });

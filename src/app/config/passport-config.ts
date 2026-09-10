@@ -60,16 +60,17 @@ passport.use(
           }
         }
 
-        // 3) Create a brand new user if no match by socialId or email
-        const newUser = new User({
-          socialId: profile.id,
-          signupType: profile.provider,
-          email: email,
-          username: profile.displayName,
-          image: (profile.photos && profile.photos[0]?.value) || 'profile.png',
-        });
-        await newUser.save();
-        return done(null, newUser);
+        // New accounts are created only by the callback after consent is checked.
+        return done(null, {
+          pendingGoogleProfile: {
+            socialId: profile.id,
+            signupType: profile.provider,
+            email,
+            username: profile.displayName,
+            image:
+              (profile.photos && profile.photos[0]?.value) || 'profile.png',
+          },
+        } as any);
       } catch (err: unknown) {
         const error = err as Error;
         logger.error('Google OAuth failed');

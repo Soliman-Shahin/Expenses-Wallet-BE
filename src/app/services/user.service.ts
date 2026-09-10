@@ -25,9 +25,10 @@ export class UserService {
   // Create a new user
   static async createUser(
     email: string,
-    hashedPassword: string
+    hashedPassword: string,
+    extra: Record<string, unknown> = {}
   ): Promise<UserDocument> {
-    const user = new User({ email, password: hashedPassword });
+    const user = new User({ email, password: hashedPassword, ...extra });
     await user.save();
     return user;
   }

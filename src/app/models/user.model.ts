@@ -120,6 +120,10 @@ interface UserDocument extends Document {
   salary?: Array<{ label: string; amount: number }>;
   currency?: string;
   emailVerified?: boolean;
+  termsAcceptedAt?: Date;
+  termsVersion?: string;
+  privacyAcceptedAt?: Date;
+  privacyVersion?: string;
   role: string;
   sessions: IUserSession[];
   isActive?: boolean;
@@ -184,6 +188,10 @@ const UserSchema = new Schema<UserDocument>(
     ],
     currency: String,
     emailVerified: { type: Boolean, default: false },
+    termsAcceptedAt: Date,
+    termsVersion: String,
+    privacyAcceptedAt: Date,
+    privacyVersion: String,
     role: {
       type: String,
       default: UserRole.User,

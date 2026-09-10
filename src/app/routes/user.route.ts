@@ -20,6 +20,10 @@ import { loginSchema, signUpSchema } from '../validations/user.validation';
 import multer from 'multer';
 import { strictAuthRateLimiter } from '../middleware/rate-limit.middleware';
 import { checkBruteForce } from '../middleware/brute-force.middleware';
+import {
+  assertNewAccountConsent,
+  consentFields,
+} from '../config/consent.config';
 
 const router = Router();
 const upload = multer({
@@ -235,6 +239,16 @@ router.post('/auth/google/native', async (req: Request, res: Response) => {
     // Find or create user by socialId or email
     let user = await User.findOne({ $or: [{ socialId: sub }, { email }] });
     if (!user) {
+      try {
+        assertNewAccountConsent(req.body);
+      } catch (error: any) {
+        return res
+          .status(error.statusCode || 400)
+          .json({
+            success: false,
+            error: { message: error.message, code: error.code },
+          });
+      }
       user = new (User as any)({
         signupType: 'google',
         socialId: sub,
@@ -242,6 +256,7 @@ router.post('/auth/google/native', async (req: Request, res: Response) => {
         username: name,
         image: picture,
         emailVerified,
+        ...consentFields(),
       });
       await (user as any).save();
     } else {
@@ -323,6 +338,15 @@ router.post(
 
 router.get(
   '/google',
+  (req: Request, res: Response, next) => {
+    if (req.query.consent === '1')
+      res.cookie('ew_google_consent', '1', {
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 10 * 60 * 1000,
+      });
+    next();
+  },
   passport.authenticate('google', {
     scope: ['profile', 'email'],
     session: false,
@@ -340,6 +364,18 @@ router.get(
         return res.status(401).send('Authentication failed');
       }
 
+      if (user.pendingGoogleProfile) {
+        if (req.cookies?.ew_google_consent !== '1') {
+          return res.redirect(
+            `${process.env.FRONTEND_URL || 'http://localhost:4200'}/auth/signup?error=consent_required`
+          );
+        }
+        const profile = user.pendingGoogleProfile;
+        const created = new User({ ...profile, ...consentFields() });
+        await created.save();
+        (req as any).user = created;
+        res.clearCookie('ew_google_consent');
+      }
       // Generate tokens using existing instance methods on the User model
       const refreshToken = await user.createSession();
       const accessToken = await user.generateAccessAuthToken();
