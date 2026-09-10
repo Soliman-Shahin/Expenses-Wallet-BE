@@ -75,7 +75,11 @@ export const verifyAccessToken = async (
 
     // Attach user id and user object to request for downstream use
     authReq.user_id = payload._id;
-    authReq.user = { _id: payload._id, email: payload.email, role: userDoc.role as UserRole };
+    authReq.user = {
+      _id: payload._id,
+      email: payload.email,
+      role: userDoc.role as UserRole,
+    };
 
     logger.debug('JWT verified successfully for user:', payload._id);
 
