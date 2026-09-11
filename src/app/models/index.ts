@@ -10,3 +10,4 @@ export * from './role.model';
 export * from './device-push-token.model';
 export * from './notification.model';
 export * from './user-notification.model';
+export * from './biometric-credential.model';

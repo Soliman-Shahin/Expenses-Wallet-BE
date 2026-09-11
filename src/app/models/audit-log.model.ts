@@ -3,7 +3,7 @@ import { UserRole } from './user.model';
 
 /**
  * Audit Log Actions
- * 
+ *
  * Tracks all security-sensitive operations in the system
  */
 export enum AuditAction {
@@ -15,11 +15,11 @@ export enum AuditAction {
   USER_LOGIN = 'user:login',
   USER_LOGOUT = 'user:logout',
   USER_LOGIN_FAILED = 'user:login_failed',
-  
+
   // Role Management
   ROLE_CHANGED = 'role:changed',
   ROLE_ASSIGNED = 'role:assigned',
-  
+
   // Permission Management
   PERMISSION_GRANTED = 'permission:granted',
   PERMISSION_REVOKED = 'permission:revoked',
@@ -29,7 +29,7 @@ export enum AuditAction {
   PERMISSION_REVOKE_TEMPORARY = 'permission:revoke_temporary',
   PERMISSION_EXPIRE_TEMPORARY = 'permission:expire_temporary',
   PERMISSION_EXTEND_TEMPORARY = 'permission:extend_temporary',
-  
+
   // Plan Management
   PLAN_CREATED = 'plan:created',
   PLAN_UPDATED = 'plan:updated',
@@ -38,7 +38,7 @@ export enum AuditAction {
   PLAN_UPGRADED = 'plan:upgraded',
   PLAN_DOWNGRADED = 'plan:downgraded',
   PLAN_EXPIRED = 'plan:expired',
-  
+
   // Resource Management
   EXPENSE_CREATED = 'expense:created',
   EXPENSE_UPDATED = 'expense:updated',
@@ -48,7 +48,7 @@ export enum AuditAction {
   CATEGORY_UPDATED = 'category:updated',
   CATEGORY_DELETED = 'category:deleted',
   CATEGORY_RESTORED = 'category:restored',
-  
+
   // Security Events
   PASSWORD_CHANGED = 'password:changed',
   PASSWORD_RESET_REQUESTED = 'password:reset_requested',
@@ -56,7 +56,12 @@ export enum AuditAction {
   EMAIL_VERIFIED = 'email:verified',
   TWO_FACTOR_ENABLED = 'two_factor:enabled',
   TWO_FACTOR_DISABLED = 'two_factor:disabled',
-  
+  BIOMETRIC_ENROLLED = 'biometric:enrolled',
+  BIOMETRIC_SIGNIN = 'biometric:signin',
+  BIOMETRIC_SIGNIN_FAILED = 'biometric:signin_failed',
+  BIOMETRIC_REVOKED = 'biometric:revoked',
+  BIOMETRIC_RESET_REVOKED = 'biometric:reset_revoked',
+
   // Access Control
   ACCESS_DENIED = 'access:denied',
   PERMISSION_DENIED = 'permission:denied',
@@ -83,12 +88,12 @@ export interface IAuditLog extends Document {
   actorRole?: UserRole;
   /** Email of the actor (for quick reference) */
   actorEmail?: string;
-  
+
   /** The action that was performed */
   action: AuditAction;
   /** Severity level of the action */
   severity: AuditSeverity;
-  
+
   /** Target user ID (if action affects a specific user) */
   targetUserId?: string;
   /** Target user role (if applicable) */
@@ -97,12 +102,12 @@ export interface IAuditLog extends Document {
   targetResourceType?: string;
   /** Target resource ID */
   targetResourceId?: string;
-  
+
   /** Detailed changes made (before/after values) */
   changes?: Record<string, any>;
   /** Additional metadata about the action */
   metadata?: Record<string, any>;
-  
+
   /** IP address of the request */
   ipAddress?: string;
   /** User agent string */
@@ -111,15 +116,15 @@ export interface IAuditLog extends Document {
   requestPath?: string;
   /** HTTP method */
   requestMethod?: string;
-  
+
   /** Whether the action was successful */
   success: boolean;
   /** Error message if action failed */
   errorMessage?: string;
-  
+
   /** Timestamp of the action */
   timestamp: Date;
-  
+
   /** TTL for automatic deletion (optional) */
   expiresAt?: Date;
 }
@@ -129,10 +134,10 @@ const AuditLogSchema = new Schema<IAuditLog>(
     actorId: { type: String, index: true },
     actorRole: { type: String, enum: Object.values(UserRole) },
     actorEmail: { type: String },
-    
-    action: { 
-      type: String, 
-      enum: Object.values(AuditAction), 
+
+    action: {
+      type: String,
+      enum: Object.values(AuditAction),
       required: true,
       index: true,
     },
@@ -142,27 +147,27 @@ const AuditLogSchema = new Schema<IAuditLog>(
       default: AuditSeverity.INFO,
       index: true,
     },
-    
+
     targetUserId: { type: String, index: true },
     targetRole: { type: String, enum: Object.values(UserRole) },
     targetResourceType: { type: String, index: true },
     targetResourceId: { type: String, index: true },
-    
+
     changes: { type: Schema.Types.Mixed },
     metadata: { type: Schema.Types.Mixed },
-    
+
     ipAddress: { type: String },
     userAgent: { type: String },
     requestPath: { type: String },
     requestMethod: { type: String },
-    
+
     success: { type: Boolean, default: true, index: true },
     errorMessage: { type: String },
-    
+
     timestamp: { type: Date, default: Date.now, index: true },
     expiresAt: { type: Date, index: true },
   },
-  { 
+  {
     timestamps: false, // We use our own timestamp field
     collection: 'audit_logs',
   }

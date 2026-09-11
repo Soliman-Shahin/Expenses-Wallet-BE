@@ -1,3 +1,4 @@
 export * from './user.controller';
 export * from './category.controller';
 export * from './expense.controller';
+export * from './biometric.controller';

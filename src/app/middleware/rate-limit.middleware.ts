@@ -129,6 +129,11 @@ export const strictAuthRateLimiter = createRateLimiter({
   maxRequests: process.env.NODE_ENV === 'production' ? 5 : 100,
   message: 'Too many authentication attempts, please try again later',
 });
+export const biometricAuthRateLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  maxRequests: process.env.NODE_ENV === 'production' ? 5 : 100,
+  message: 'Too many biometric sign-in attempts, please try again later',
+});
 
 /**
  * Standard rate limiter for API endpoints
@@ -163,6 +168,7 @@ export const veryStrictRateLimiter = createRateLimiter({
 export default {
   createRateLimiter,
   strictAuthRateLimiter,
+  biometricAuthRateLimiter,
   standardRateLimiter,
   lenientRateLimiter,
   veryStrictRateLimiter,

@@ -26,4 +26,11 @@ describe('AUTH.3 public password recovery CSRF contract', () => {
       .send({ title: 'Test' });
     expect(response.status).toBe(403);
   });
+
+  it('allows native biometric sign-in to reach validation without CSRF', async () => {
+    const response = await request(app)
+      .post('/v1/user/biometric/signin')
+      .send({ deviceId: '', credential: '' });
+    expect(response.status).toBe(400);
+  });
 });

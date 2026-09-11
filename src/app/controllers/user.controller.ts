@@ -17,6 +17,9 @@ import {
 import logger from '../services/logger.service';
 import crypto from 'crypto';
 import { MailService } from '../services/mail.service';
+import { BiometricCredentialService } from '../services/biometric-credential.service';
+import { auditLogService } from '../services/audit-log.service';
+import { AuditAction } from '../models/audit-log.model';
 import {
   UserCredentials,
   UserUpdatePayload,
@@ -294,6 +297,20 @@ const resetPassword = async (req: CustomRequest, res: Response) => {
     user.passwordResetTokenHash = undefined;
     user.passwordResetExpiresAt = undefined;
     user.passwordResetRequestedAt = undefined;
+    await BiometricCredentialService.revokeAllForUser(
+      user._id.toString(),
+      'password_reset'
+    );
+    try {
+      await auditLogService.log({
+        req,
+        action: AuditAction.BIOMETRIC_RESET_REVOKED,
+        targetUserId: user._id.toString(),
+        metadata: { reason: 'password_reset' },
+      });
+    } catch {
+      /* do not expose secrets or fail a completed reset */
+    }
     await user.save();
     return sendSuccess(res, {}, 'Password reset successfully');
   } catch {

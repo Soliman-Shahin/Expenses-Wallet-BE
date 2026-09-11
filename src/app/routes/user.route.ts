@@ -15,12 +15,23 @@ import {
   uploadAvatar,
   requestPasswordReset,
   resetPassword,
+  enrollBiometric,
+  biometricSignIn,
+  revokeCurrentBiometric,
 } from '../controllers';
 import { verifyAccessToken } from '../middleware/access.middleware';
 import { validateRequestWithZod, verifySession } from '../middleware';
 import { loginSchema, signUpSchema } from '../validations/user.validation';
 import multer from 'multer';
-import { strictAuthRateLimiter } from '../middleware/rate-limit.middleware';
+import {
+  strictAuthRateLimiter,
+  biometricAuthRateLimiter,
+} from '../middleware/rate-limit.middleware';
+import {
+  biometricEnrollSchema,
+  biometricSignInSchema,
+  biometricRevokeSchema,
+} from '../validations/biometric.validation';
 import { checkBruteForce } from '../middleware/brute-force.middleware';
 import {
   assertNewAccountConsent,
@@ -159,6 +170,24 @@ router.post('/refresh-token', strictAuthRateLimiter, refreshToken);
 router.post('/logout', strictAuthRateLimiter, logout);
 router.post('/password/forgot', strictAuthRateLimiter, requestPasswordReset);
 router.post('/password/reset', strictAuthRateLimiter, resetPassword);
+router.post(
+  '/biometric/signin',
+  biometricAuthRateLimiter,
+  validateRequestWithZod(biometricSignInSchema),
+  biometricSignIn as RequestHandler
+);
+router.post(
+  '/biometric/enroll',
+  verifyAccessToken,
+  validateRequestWithZod(biometricEnrollSchema),
+  enrollBiometric as RequestHandler
+);
+router.delete(
+  '/biometric/current',
+  verifyAccessToken,
+  validateRequestWithZod(biometricRevokeSchema),
+  revokeCurrentBiometric as RequestHandler
+);
 
 // Native Google Sign-In (Android/iOS) using idToken from Capacitor plugin
 router.post('/auth/google/native', async (req: Request, res: Response) => {
