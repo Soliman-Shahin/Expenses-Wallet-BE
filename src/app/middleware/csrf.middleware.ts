@@ -48,8 +48,8 @@ export const conditionalCsrfProtection = (
     '/v1/user/register',
     '/v1/user/verify-otp',
     '/v1/user/resend-otp',
-    '/v1/user/forgot-password',
-    '/v1/user/reset-password',
+    '/v1/user/password/forgot',
+    '/v1/user/password/reset',
     '/v1/user/refresh-token',
     // Logout authenticates using an explicit body credential, never ambient cookies.
     '/v1/user/logout',

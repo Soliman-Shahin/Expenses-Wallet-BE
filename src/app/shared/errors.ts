@@ -309,6 +309,12 @@ export function toAppError(error: any): AppError {
     return error;
   }
 
+  // csurf uses this code for a missing/invalid token. Preserve the
+  // middleware's intended 403 semantics instead of treating it as internal.
+  if (error?.code === 'EBADCSRFTOKEN') {
+    return new AppError('Invalid CSRF token', 403, 'CSRF_INVALID', true);
+  }
+
   // Handle Mongoose errors
   if (error.name === 'ValidationError') {
     return new ValidationError('Validation failed', error.errors);
