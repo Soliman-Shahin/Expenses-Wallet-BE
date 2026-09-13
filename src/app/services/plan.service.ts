@@ -211,7 +211,11 @@ export class PlanService {
     }
 
     const permissions = Array.from(
-      new Set([...plan.features, ...(user.customPermissions || []), ...rolePermissions])
+      new Set([
+        ...plan.features,
+        ...(user.customPermissions || []),
+        ...rolePermissions,
+      ])
     );
 
     return {
@@ -437,16 +441,34 @@ export class PlanService {
 
     const plan = await this.getPlanBySlug(planSlug);
 
+    if (user.plan === planSlug) {
+      logger.debug('[SUBSCRIPTION-BE-TRACE][SAME-PLAN-NOOP]', {
+        plan: planSlug,
+      });
+      return user;
+    }
+
     user.plan = planSlug;
     const now = new Date();
-    
+
     if (plan.billingCycle === 'lifetime' || durationDays === null) {
       user.planExpiresAt = null;
     } else {
-      user.planExpiresAt = new Date(now.getTime() + durationDays * 24 * 60 * 60 * 1000);
+      user.planExpiresAt = new Date(
+        now.getTime() + durationDays * 24 * 60 * 60 * 1000
+      );
     }
-    
+
     await user.save();
+
+    const activeBefore = await Subscription.countDocuments({
+      user: userId,
+      status: 'active',
+    });
+    await Subscription.updateMany(
+      { user: userId, status: 'active' },
+      { $set: { status: 'expired', endDate: now } }
+    );
 
     await Subscription.create({
       user: userId,
@@ -456,6 +478,12 @@ export class PlanService {
       endDate: user.planExpiresAt,
       paymentRef,
       adminNote,
+    });
+
+    logger.debug('[SUBSCRIPTION-BE-TRACE][PLAN-TRANSITION]', {
+      targetPlan: planSlug,
+      activeBefore,
+      historyCount: await Subscription.countDocuments({ user: userId }),
     });
 
     logger.info(`Assigned plan ${planSlug} to user ${userId}`);

@@ -12,6 +12,7 @@ import {
 } from '../types/plan.types';
 import { NotFoundError, BadRequestError } from '../shared/errors';
 import logger from '../services/logger.service';
+import { permissionCacheService } from '../services/permission-cache.service';
 
 /**
  * Plan Controller
@@ -80,6 +81,17 @@ export class PlanController {
         .populate('plan', 'name slug price currency billingCycle')
         .lean();
 
+      logger.debug('[SUBSCRIPTION-BE-TRACE][HISTORY]', {
+        count: subscriptions.length,
+        entries: subscriptions.map((entry: any) => ({
+          id: entry._id,
+          plan: entry.plan?.slug,
+          status: entry.status,
+          start: entry.startDate,
+          end: entry.endDate,
+        })),
+      });
+
       sendSuccess(
         res,
         {
@@ -135,11 +147,25 @@ export class PlanController {
         paymentRef
       );
 
+      permissionCacheService.invalidateUser(userId);
+      logger.debug('[SUBSCRIPTION-BE-TRACE][UPGRADE-CACHE-INVALIDATED]', {
+        targetPlan: planSlug,
+      });
+      const refreshed = await planService.getMyPlan(userId);
+      logger.debug('[SUBSCRIPTION-BE-TRACE][UPGRADE-RESULT]', {
+        plan: refreshed.plan?.slug,
+        subscriptionId: refreshed.subscriptionHistory?.[0]?._id,
+        historyCount: refreshed.subscriptionHistory?.length ?? 0,
+      });
+
       logger.info(`User ${userId} upgraded to plan: ${planSlug}`);
       sendSuccess(
         res,
         {
-          plan: updatedUser.plan,
+          plan: refreshed.plan,
+          context: refreshed.context,
+          usage: refreshed.usage,
+          subscriptionHistory: refreshed.subscriptionHistory,
           planExpiresAt: updatedUser.planExpiresAt,
           planStartedAt: updatedUser.planStartedAt,
         },

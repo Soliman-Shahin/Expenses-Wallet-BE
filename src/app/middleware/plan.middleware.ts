@@ -45,19 +45,28 @@ export const attachPlanContext = async (
 
     // Use cache for better performance
     const planContext = await permissionCacheService.getUserPlanContext(userId);
-    
+
+    logger.debug('[SUBSCRIPTION-BE-TRACE][PLAN-CONTEXT]', {
+      plan: planContext.planSlug,
+      cached: permissionCacheService.isCached(userId),
+      expired: planContext.isExpired,
+    });
+
     // Add temporary permissions to the context
-    const tempPermissions = await temporaryPermissionService.getActivePermissionsList(userId);
+    const tempPermissions =
+      await temporaryPermissionService.getActivePermissionsList(userId);
     if (tempPermissions.length > 0) {
       // Merge temporary permissions with plan permissions (avoid duplicates)
-      const allPermissions = [...new Set([...planContext.permissions, ...tempPermissions])];
+      const allPermissions = [
+        ...new Set([...planContext.permissions, ...tempPermissions]),
+      ];
       planContext.permissions = allPermissions;
-      
+
       logger.debug(
         `Added ${tempPermissions.length} temporary permissions for user ${userId}`
       );
     }
-    
+
     (req as PlanRequest).planContext = planContext;
 
     logger.debug(
@@ -175,19 +184,13 @@ export const rejectExpiredPlan = async (
       plan: planReq.planContext.planSlug,
       expiredAt: planReq.planContext.planExpiresAt!,
     });
-    
-    sendError(
-      res,
-      errorDetails.message,
-      403,
-      'PLAN_EXPIRED',
-      {
-        expiredAt: planReq.planContext.planExpiresAt,
-        daysExpired: errorDetails.daysExpired,
-        suggestion: errorDetails.suggestion,
-        renewUrl: errorDetails.renewUrl,
-      }
-    );
+
+    sendError(res, errorDetails.message, 403, 'PLAN_EXPIRED', {
+      expiredAt: planReq.planContext.planExpiresAt,
+      daysExpired: errorDetails.daysExpired,
+      suggestion: errorDetails.suggestion,
+      renewUrl: errorDetails.renewUrl,
+    });
     return;
   }
 
