@@ -45,7 +45,6 @@ const defaultOptions: EncryptionOptions = {
     '/v1/user/auth/facebook/native',
     '/v1/expenses',
     '/v1/categories',
-    '/v1/sync',
   ],
   encryptByDefault: false,
   maxPayloadSize: 10 * 1024 * 1024, // 10MB
