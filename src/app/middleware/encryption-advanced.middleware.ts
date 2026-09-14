@@ -10,6 +10,7 @@ import {
   decryptCryptoJS,
   isCryptoJSFormat,
 } from '../shared/encryption-cryptojs-compat';
+import { sendError } from '../shared/helper';
 
 /**
  * Enhanced Encryption Middleware with Selective Encryption
@@ -143,6 +144,31 @@ export function createEncryptionMiddleware(customOptions?: EncryptionOptions) {
       } catch (error) {
         // Continue with original body if decryption fails
       }
+    }
+
+    // Classification observes the result of the authoritative decryption above.
+    // It must never infer failure from the wire format before decryption runs.
+    if (Array.isArray(req.body?.entities)) {
+      req.body.entities = req.body.entities.map(
+        (entity: any, index: number) => {
+          const topLevelEncrypted = isAlreadyEncrypted(entity._id);
+          const categoryObject =
+            entity.category && typeof entity.category === 'object'
+              ? entity.category
+              : null;
+          const nestedEncrypted = isAlreadyEncrypted(categoryObject?._id);
+          const topLevelFailed = topLevelEncrypted;
+          const nestedFailed = nestedEncrypted;
+          return topLevelFailed || nestedFailed
+            ? {
+                ...entity,
+                _syncError: topLevelFailed
+                  ? 'TOP_LEVEL_ID_DECRYPT_FAILED'
+                  : 'NESTED_CATEGORY_ID_DECRYPT_FAILED',
+              }
+            : entity;
+        }
+      );
     }
 
     // ============================================

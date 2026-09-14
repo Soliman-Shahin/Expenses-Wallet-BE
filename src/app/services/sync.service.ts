@@ -209,6 +209,7 @@ export class SyncService {
     conflicts: any[];
     processed: number;
     idMap: Record<string, string>;
+    errors: any[];
   }> {
     logger.info(
       `📤 [SYNC] Push request: ${entities.length} entities from user ${userId}`
@@ -216,10 +217,18 @@ export class SyncService {
 
     const conflicts: any[] = [];
     let processed = 0;
+    const errors: any[] = [];
     const idMap = new Map<string, string>();
 
     try {
       for (const entity of entities) {
+        if (entity._syncError) {
+          errors.push({
+            operationId: entity._operationId,
+            reason: entity._syncError,
+          });
+          continue;
+        }
         try {
           const result = await this.processEntity(userId, entity, idMap);
 
@@ -249,6 +258,7 @@ export class SyncService {
         conflicts,
         processed,
         idMap: Object.fromEntries(idMap),
+        errors,
       };
     } catch (error: any) {
       logger.error('❌ [SYNC] Push error:', error);
@@ -270,6 +280,8 @@ export class SyncService {
       _version,
       _lastModified,
       _isDeleted,
+      _syncError,
+      _operationId,
       ...entityData
     } = entity;
 
@@ -304,15 +316,22 @@ export class SyncService {
       }
 
       // Find existing entity
+      const correlationId =
+        typeof entityData._clientId === 'string' &&
+        entityData._clientId.startsWith('offline_')
+          ? entityData._clientId
+          : typeof _id === 'string' && _id.startsWith('offline_')
+            ? _id
+            : undefined;
       let existingEntity = null;
       let targetId = _id;
 
       if (mongoose.Types.ObjectId.isValid(_id)) {
         existingEntity = await Model.findOne({ _id, user: userObjectId });
-      } else if (_id && typeof _id === 'string' && _id.startsWith('offline_')) {
+      } else if (correlationId) {
         // It's an offline ID, search by _clientId
         existingEntity = await Model.findOne({
-          _clientId: _id,
+          _clientId: correlationId,
           user: userObjectId,
         });
         if (existingEntity) {
@@ -329,6 +348,10 @@ export class SyncService {
         };
       }
 
+      if (existingEntity && correlationId) {
+        idMap.set(correlationId, existingEntity._id.toString());
+      }
+
       // Process based on operation
       if (_isDeleted) {
         await this.handleDelete(Model, targetId, userId);
@@ -343,7 +366,14 @@ export class SyncService {
         );
         logger.info(`✏️ [SYNC] Updated ${_entityType}:${targetId}`);
       } else {
-        await this.handleCreate(Model, entityData, userId, targetId, idMap);
+        await this.handleCreate(
+          Model,
+          entityData,
+          userId,
+          targetId,
+          idMap,
+          _operationId
+        );
         logger.info(`🆕 [SYNC] Created ${_entityType}:${targetId}`);
       }
 
@@ -382,7 +412,8 @@ export class SyncService {
     data: any,
     userId: string,
     entityId: string | undefined,
-    idMap: Map<string, string>
+    idMap: Map<string, string>,
+    operationId?: string
   ): Promise<void> {
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
@@ -407,8 +438,15 @@ export class SyncService {
     const entity = new Model(entityData);
     await entity.save();
 
-    if (entityId && entityId.startsWith('offline_')) {
-      idMap.set(entityId, entity._id.toString());
+    const correlationId =
+      typeof data._clientId === 'string' &&
+      data._clientId.startsWith('offline_')
+        ? data._clientId
+        : typeof entityId === 'string' && entityId.startsWith('offline_')
+          ? entityId
+          : undefined;
+    if (correlationId) {
+      idMap.set(correlationId, entity._id.toString());
     }
   }
 

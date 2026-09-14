@@ -47,6 +47,8 @@ function validateEnvironmentVariables(): void {
 async function startServer() {
   try {
     config();
+    if (process.env.NODE_ENV !== 'production') {
+    }
 
     // Validate environment variables before starting
     validateEnvironmentVariables();
