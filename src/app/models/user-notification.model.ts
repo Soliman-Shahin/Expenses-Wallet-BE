@@ -28,6 +28,7 @@ UserNotificationSchema.index(
   { unique: true }
 );
 UserNotificationSchema.index({ userId: 1, readAt: 1, createdAt: -1 });
+UserNotificationSchema.index({ userId: 1, createdAt: -1, _id: -1 });
 
 export const UserNotification = model<UserNotificationDocument>(
   'UserNotification',

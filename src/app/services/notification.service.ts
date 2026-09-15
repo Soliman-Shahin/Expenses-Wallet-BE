@@ -19,6 +19,45 @@ interface BroadcastInput {
 }
 
 export class NotificationService {
+  static async listForUser(userId: string, limit = 50, offset = 0) {
+    const safeLimit = Math.min(Math.max(limit, 1), 100);
+    const safeOffset = Math.max(offset, 0);
+    const rows = await UserNotification.find({
+      userId: new Types.ObjectId(userId),
+    })
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(safeOffset)
+      .limit(safeLimit)
+      .populate({
+        path: 'notificationId',
+        select: 'title message type routeKey createdAt',
+      })
+      .lean();
+    const total = await UserNotification.countDocuments({
+      userId: new Types.ObjectId(userId),
+    });
+    const unreadCount = await UserNotification.countDocuments({
+      userId: new Types.ObjectId(userId),
+      readAt: { $exists: false },
+    });
+    return {
+      data: rows
+        .filter((row: any) => row.notificationId)
+        .map((row: any) => ({
+          id: row.notificationId._id.toString(),
+          title: row.notificationId.title,
+          message: row.notificationId.message,
+          type: row.notificationId.type,
+          routeKey: row.notificationId.routeKey,
+          isRead: !!row.readAt,
+          createdAt: row.notificationId.createdAt,
+        })),
+      total,
+      unreadCount,
+      hasMore: safeOffset + rows.length < total,
+    };
+  }
+
   static async broadcast(input: BroadcastInput) {
     const notification = await Notification.create({
       title: input.title,
@@ -40,7 +79,9 @@ export class NotificationService {
     }
 
     const recipients = await User.find(userFilter).select('_id').lean();
-    const userIds = recipients.map((recipient) => recipient._id as Types.ObjectId);
+    const userIds = recipients.map(
+      (recipient) => recipient._id as Types.ObjectId
+    );
 
     if (userIds.length > 0) {
       await UserNotification.insertMany(
@@ -95,9 +136,12 @@ export class NotificationService {
     } catch {
       notification.status = 'failed';
       await notification.save();
-      logger.warn('[Notification] Persisted notification push delivery failed', {
-        notificationId: notification._id.toString(),
-      });
+      logger.warn(
+        '[Notification] Persisted notification push delivery failed',
+        {
+          notificationId: notification._id.toString(),
+        }
+      );
     }
 
     return notification;
@@ -137,5 +181,13 @@ export class NotificationService {
       { $set: { readAt: new Date(), openedAt: new Date() } }
     );
     return result.matchedCount > 0;
+  }
+
+  static async markAllRead(userId: string) {
+    const result = await UserNotification.updateMany(
+      { userId: new Types.ObjectId(userId), readAt: { $exists: false } },
+      { $set: { readAt: new Date(), openedAt: new Date() } }
+    );
+    return { updatedCount: result.modifiedCount };
   }
 }
