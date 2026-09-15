@@ -413,7 +413,15 @@ router.get(
 
       // Sanitize user object
       const rawUser = user.toJSON ? user.toJSON() : user;
-      const { password, sessions, ...safeUser } = rawUser;
+      const { password, sessions, image, ...userWithoutSecrets } = rawUser;
+      // Never place binary avatar data in the browser redirect. The profile
+      // endpoint can hydrate an already-persisted avatar after authentication.
+      const safeUser = {
+        ...userWithoutSecrets,
+        ...(typeof image === 'string' && !image.startsWith('data:')
+          ? { image }
+          : {}),
+      };
 
       // Encode payload as base64
       const payload = {
