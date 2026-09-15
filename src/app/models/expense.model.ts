@@ -43,7 +43,9 @@ const expenseSchema = new Schema(
 // Index for sync operations
 expenseSchema.index({ user: 1, _lastModified: -1 });
 expenseSchema.index({ user: 1, _syncStatus: 1 });
-expenseSchema.index({ _clientId: 1 });
+// Client identities are the durable idempotency key for offline CREATE retries.
+// Scope it by owner so two accounts can legitimately use the same local key.
+expenseSchema.index({ user: 1, _clientId: 1 }, { unique: true, sparse: true });
 
 const Expense = model<IExpense>('Expense', expenseSchema);
 export { Expense };

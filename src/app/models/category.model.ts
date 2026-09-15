@@ -87,7 +87,8 @@ categorySchema.pre(
 // Index for sync operations
 categorySchema.index({ user: 1, _lastModified: -1 });
 categorySchema.index({ user: 1, _syncStatus: 1 });
-categorySchema.index({ _clientId: 1 });
+// Client identities are the durable idempotency key for offline CREATE retries.
+categorySchema.index({ user: 1, _clientId: 1 }, { unique: true, sparse: true });
 // Index for filtering by user and type (income/outcome)
 categorySchema.index({ user: 1, type: 1 });
 // Index for ordering categories

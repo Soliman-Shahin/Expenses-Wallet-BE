@@ -245,7 +245,10 @@ export class SyncService {
             `❌ [SYNC] Error processing entity ${entity._id}:`,
             error
           );
-          // Continue processing other entities
+          errors.push({
+            operationId: entity._operationId,
+            reason: error.message || 'SYNC_PROCESSING_FAILED',
+          });
         }
       }
 
@@ -435,18 +438,36 @@ export class SyncService {
       }
     }
 
-    const entity = new Model(entityData);
-    await entity.save();
+    try {
+      const entity = new Model(entityData);
+      await entity.save();
 
-    const correlationId =
-      typeof data._clientId === 'string' &&
-      data._clientId.startsWith('offline_')
-        ? data._clientId
-        : typeof entityId === 'string' && entityId.startsWith('offline_')
-          ? entityId
-          : undefined;
-    if (correlationId) {
-      idMap.set(correlationId, entity._id.toString());
+      const correlationId =
+        typeof data._clientId === 'string' &&
+        data._clientId.startsWith('offline_')
+          ? data._clientId
+          : typeof entityId === 'string' && entityId.startsWith('offline_')
+            ? entityId
+            : undefined;
+      if (correlationId) idMap.set(correlationId, entity._id.toString());
+    } catch (error: any) {
+      // A concurrent retry may win the unique owner/clientId insert. Treat that
+      // duplicate as the already-created logical entity.
+      if (error?.code !== 11000) throw error;
+      const correlationId =
+        typeof data._clientId === 'string' &&
+        data._clientId.startsWith('offline_')
+          ? data._clientId
+          : typeof entityId === 'string' && entityId.startsWith('offline_')
+            ? entityId
+            : undefined;
+      if (!correlationId) throw error;
+      const existing = await Model.findOne({
+        user: userObjectId,
+        _clientId: correlationId,
+      });
+      if (!existing) throw error;
+      idMap.set(correlationId, existing._id.toString());
     }
   }
 
