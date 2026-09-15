@@ -18,6 +18,7 @@ const defaultOrigins = [
   'capacitor://localhost',
   'ionic://localhost',
   'https://expenses-wallet.up.railway.app', // API itself (not typically needed but safe)
+  'https://expenses-wallet-admin-production.up.railway.app',
 ];
 
 const allowedOrigins = Array.from(new Set([...defaultOrigins, ...envOrigins]));
