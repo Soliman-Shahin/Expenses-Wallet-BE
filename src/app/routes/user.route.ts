@@ -398,7 +398,7 @@ router.get(
       if (user.pendingGoogleProfile) {
         if (req.cookies?.ew_google_consent !== '1') {
           return res.redirect(
-            `${process.env.FRONTEND_URL || 'http://localhost:4200'}/auth/signup?error=consent_required`
+            `${process.env.FRONTEND_URL || 'http://localhost:4400'}/auth/signup?error=consent_required`
           );
         }
         const profile = user.pendingGoogleProfile;
@@ -425,13 +425,13 @@ router.get(
       );
 
       // Redirect to frontend with payload in URL
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4400';
       const redirectUrl = `${frontendUrl}/auth/callback?data=${encodeURIComponent(payloadB64)}`;
 
       return res.redirect(redirectUrl);
     } catch (err) {
       logger.error('Google OAuth callback failed');
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4200';
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4400';
       return res.redirect(`${frontendUrl}/auth/login?error=oauth_failed`);
     }
   }

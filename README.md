@@ -134,7 +134,7 @@ PORT=3000
 NODE_ENV=development
 
 # CORS
-ALLOWED_ORIGINS=http://localhost:4200,http://localhost:8100
+ALLOWED_ORIGINS=http://localhost:4400,http://localhost:8100
 ```
 
 See **[.env.example](.env.example)** for all available options.

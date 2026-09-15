@@ -10,6 +10,7 @@ const defaultOrigins = [
   'https://localhost', // Capacitor Android when androidScheme is 'https'
   'http://localhost:4200',
   'http://localhost:4300',
+  'http://localhost:4400',
   'http://localhost:8200',
   'http://localhost:8100',
   'http://127.0.0.1:51802',
