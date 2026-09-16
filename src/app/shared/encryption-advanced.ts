@@ -1,5 +1,6 @@
 import logger from '../services/logger.service';
 import crypto from 'crypto';
+import { validateEncryptionKey } from '../config/encryption-config';
 
 /**
  * Advanced Encryption/Decryption Utility
@@ -35,24 +36,12 @@ function getEncryptionKey(): Buffer {
     );
   }
 
-  if (!key) {
-    logger.warn(
-      '⚠️  ENCRYPTION_KEY not set in environment variables. Using default (INSECURE for production)'
-    );
-    // Default key for development only - NEVER use in production
-    return crypto.pbkdf2Sync(
-      'TEMP_TRANSPORT_KEY_FOR_EXCHANGE',
-      'expenses-wallet-salt',
-      100000,
-      32,
-      'sha256'
-    );
-  }
+  const configuredKey = validateEncryptionKey(key);
 
   // Derive a 32-byte key from the environment variable using PBKDF2
   // This matches the Web Crypto API implementation in the frontend
   return crypto.pbkdf2Sync(
-    key,
+    configuredKey,
     'expenses-wallet-salt',
     100000, // Iterations
     32, // Key length (32 bytes = 256 bits)

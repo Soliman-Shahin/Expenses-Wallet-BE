@@ -6,6 +6,7 @@ import { planService } from './services/plan.service';
 
 import { createServer } from 'http';
 import { initializeSocketService } from './services/socket.service';
+import { validateEncryptionKey } from './config/encryption-config';
 
 const DEFAULT_PORT = 3000;
 
@@ -32,14 +33,7 @@ function validateEnvironmentVariables(): void {
     );
   }
 
-  // Validate encryption key length (should be 64 hex characters = 32 bytes)
-  const encryptionKey = process.env.ENCRYPTION_KEY!;
-  if (encryptionKey.length < 64) {
-    logger.warn(
-      '[WARNING] ENCRYPTION_KEY should be at least 64 characters (32 bytes) for AES-256.\n' +
-        "Generate a secure key with: node -e \"logger.info(require('crypto').randomBytes(32).toString('hex'))\""
-    );
-  }
+  validateEncryptionKey(process.env.ENCRYPTION_KEY);
 
   logger.info('[server]: Environment variables validated successfully ✓');
 }
