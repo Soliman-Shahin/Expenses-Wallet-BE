@@ -12,3 +12,4 @@ export * from './notification.model';
 export * from './user-notification.model';
 export * from './biometric-credential.model';
 export * from './google-oauth-exchange.model';
+export * from './notification-preference.model';

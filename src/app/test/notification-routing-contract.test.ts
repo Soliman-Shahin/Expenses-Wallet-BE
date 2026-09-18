@@ -25,4 +25,13 @@ describe('notification routing contract', () => {
     );
     expect(routeSource).toContain('markAllNotificationsRead');
   });
+
+  it('keeps preference reads and writes owner-authenticated and strictly validated', () => {
+    expect(routeSource).toContain(
+      "router.get('/preferences', verifyAccessToken, getNotificationPreferences)"
+    );
+    expect(routeSource).toContain("router.patch(\n  '/preferences',\n  verifyAccessToken");
+    expect(routeSource).toContain('validateRequestWithZod(notificationPreferencePatchSchema)');
+    expect(routeSource).toContain('updateNotificationPreferences');
+  });
 });

@@ -9,6 +9,13 @@ import { User, UserRole } from '../models/user.model';
 import logger from './logger.service';
 import { PushDeliveryService } from './push-delivery.service';
 import { getSocketService } from './socket.service';
+import { NotificationPreferenceService } from './notification-preference.service';
+import {
+  channelsForPolicy,
+  NotificationCategory,
+  NotificationChannel,
+  NotificationPolicy,
+} from '../notifications/notification-taxonomy';
 
 interface BroadcastInput {
   title: string;
@@ -19,6 +26,15 @@ interface BroadcastInput {
 }
 
 export class NotificationService {
+  static async resolveChannelsForUser(
+    userId: string,
+    category: NotificationCategory,
+    policy: NotificationPolicy = 'optional'
+  ): Promise<NotificationChannel[]> {
+    const preferences = await NotificationPreferenceService.getForUser(userId);
+    return channelsForPolicy(category, policy, preferences);
+  }
+
   static async listForUser(userId: string, limit = 50, offset = 0) {
     const safeLimit = Math.min(Math.max(limit, 1), 100);
     const safeOffset = Math.max(offset, 0);

@@ -5,6 +5,8 @@ import {
   getNotificationForCurrentUser,
   markNotificationRead,
   markAllNotificationsRead,
+  getNotificationPreferences,
+  updateNotificationPreferences,
 } from '../controllers/notification.controller';
 import { verifyAccessToken } from '../middleware/access.middleware';
 import { requireRole } from '../middleware/admin.middleware';
@@ -12,6 +14,7 @@ import { UserRole } from '../models/user.model';
 import { validateRequestWithZod } from '../middleware/validation.middleware';
 import { broadcastNotificationSchema } from '../validations/notification.validation';
 import { sendError } from '../shared/helper';
+import { notificationPreferencePatchSchema } from '../validations/notification-preference.validation';
 
 const router = Router();
 
@@ -30,6 +33,13 @@ router.post(
 
 router.get('/list', verifyAccessToken, listNotificationsForCurrentUser);
 router.patch('/all/read', verifyAccessToken, markAllNotificationsRead);
+router.get('/preferences', verifyAccessToken, getNotificationPreferences);
+router.patch(
+  '/preferences',
+  verifyAccessToken,
+  validateRequestWithZod(notificationPreferencePatchSchema),
+  updateNotificationPreferences
+);
 
 router.get(
   '/:notificationId',

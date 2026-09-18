@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/access.middleware';
 import { sendError, sendSuccess } from '../shared/helper';
 import { NotificationService } from '../services/notification.service';
+import { NotificationPreferenceService } from '../services/notification-preference.service';
 
 export const broadcastNotification = async (req: Request, res: Response) => {
   try {
@@ -96,4 +97,29 @@ export const markAllNotificationsRead = async (req: Request, res: Response) => {
   const userId = (req as AuthenticatedRequest).user_id;
   if (!userId) return sendError(res, 'Authentication required', 401);
   return sendSuccess(res, await NotificationService.markAllRead(userId));
+};
+
+export const getNotificationPreferences = async (
+  req: Request,
+  res: Response
+) => {
+  const userId = (req as AuthenticatedRequest).user_id;
+  if (!userId) return sendError(res, 'Authentication required', 401);
+  return sendSuccess(res, {
+    categories: await NotificationPreferenceService.getForUser(userId),
+  });
+};
+
+export const updateNotificationPreferences = async (
+  req: Request,
+  res: Response
+) => {
+  const userId = (req as AuthenticatedRequest).user_id;
+  if (!userId) return sendError(res, 'Authentication required', 401);
+  return sendSuccess(res, {
+    categories: await NotificationPreferenceService.updateForUser(
+      userId,
+      req.body
+    ),
+  });
 };
