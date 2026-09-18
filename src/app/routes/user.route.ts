@@ -1,6 +1,7 @@
 import { Request, RequestHandler, Response, Router } from 'express';
+import crypto from 'crypto';
 import passport from 'passport';
-import { User } from '../models/user.model';
+import { GoogleOAuthExchange, User } from '../models';
 import https from 'https';
 import { sendSuccess } from '../shared/helper';
 import logger from '../utils/logger';
@@ -37,6 +38,10 @@ import {
   assertNewAccountConsent,
   consentFields,
 } from '../config/consent.config';
+import {
+  GOOGLE_OAUTH_EXCHANGE_PURPOSE,
+  GOOGLE_OAUTH_EXCHANGE_TTL_SECONDS,
+} from '../models/google-oauth-exchange.model';
 
 const router = Router();
 const upload = multer({
@@ -168,6 +173,62 @@ router.post(
 );
 router.post('/refresh-token', strictAuthRateLimiter, refreshToken);
 router.post('/logout', strictAuthRateLimiter, logout);
+router.post(
+  '/auth/google/exchange',
+  strictAuthRateLimiter,
+  async (req: Request, res: Response) => {
+    const code = typeof req.body?.code === 'string' ? req.body.code : '';
+    if (!/^[a-f0-9]{64}$/.test(code)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid or expired exchange code' });
+    }
+
+    const exchange = await GoogleOAuthExchange.findOneAndUpdate(
+      {
+        codeHash: crypto.createHash('sha256').update(code).digest('hex'),
+        purpose: GOOGLE_OAUTH_EXCHANGE_PURPOSE,
+        consumedAt: null,
+        expiresAt: { $gt: new Date() },
+      },
+      { $set: { consumedAt: new Date() } },
+      { new: true }
+    );
+
+    if (!exchange) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid or expired exchange code' });
+    }
+
+    const user = await User.findOne({
+      _id: exchange.userId,
+      _isDeleted: { $ne: true },
+      isActive: { $ne: false },
+    });
+    if (!user) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Invalid or expired exchange code' });
+    }
+
+    const refreshToken = await user.createSession();
+    const accessToken = await user.generateAccessAuthToken();
+    const { password, sessions, image, ...userWithoutSecrets } = user.toJSON();
+    const safeUser = {
+      ...userWithoutSecrets,
+      ...(typeof image === 'string' && !image.startsWith('data:')
+        ? { image }
+        : {}),
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: { user: safeUser, tokens: { accessToken, refreshToken } },
+      message: 'Authentication successful',
+    });
+  }
+);
 router.post('/password/forgot', strictAuthRateLimiter, requestPasswordReset);
 router.post('/password/reset', strictAuthRateLimiter, resetPassword);
 router.post(
@@ -390,7 +451,7 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       // Passport attaches the authenticated user to req.user
-      const user: any = (req as any).user;
+      let user: any = (req as any).user;
       if (!user) {
         return res.status(401).send('Authentication failed');
       }
@@ -404,37 +465,23 @@ router.get(
         const profile = user.pendingGoogleProfile;
         const created = new User({ ...profile, ...consentFields() });
         await created.save();
-        (req as any).user = created;
+        user = created;
+        (req as any).user = user;
         res.clearCookie('ew_google_consent');
       }
-      // Generate tokens using existing instance methods on the User model
-      const refreshToken = await user.createSession();
-      const accessToken = await user.generateAccessAuthToken();
-
-      // Sanitize user object
-      const rawUser = user.toJSON ? user.toJSON() : user;
-      const { password, sessions, image, ...userWithoutSecrets } = rawUser;
-      // Never place binary avatar data in the browser redirect. The profile
-      // endpoint can hydrate an already-persisted avatar after authentication.
-      const safeUser = {
-        ...userWithoutSecrets,
-        ...(typeof image === 'string' && !image.startsWith('data:')
-          ? { image }
-          : {}),
-      };
-
-      // Encode payload as base64
-      const payload = {
-        user: safeUser,
-        tokens: { accessToken, refreshToken },
-      };
-      const payloadB64 = Buffer.from(JSON.stringify(payload)).toString(
-        'base64'
-      );
+      const code = crypto.randomBytes(32).toString('hex');
+      await GoogleOAuthExchange.create({
+        codeHash: crypto.createHash('sha256').update(code).digest('hex'),
+        userId: user._id,
+        purpose: GOOGLE_OAUTH_EXCHANGE_PURPOSE,
+        expiresAt: new Date(
+          Date.now() + GOOGLE_OAUTH_EXCHANGE_TTL_SECONDS * 1000
+        ),
+      });
 
       // Redirect to frontend with payload in URL
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4400';
-      const redirectUrl = `${frontendUrl}/auth/callback?data=${encodeURIComponent(payloadB64)}`;
+      const redirectUrl = `${frontendUrl}/auth/callback?code=${encodeURIComponent(code)}`;
 
       return res.redirect(redirectUrl);
     } catch (err) {

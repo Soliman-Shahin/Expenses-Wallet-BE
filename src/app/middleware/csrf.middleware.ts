@@ -42,6 +42,7 @@ export const conditionalCsrfProtection = (
     '/v1/user/auth/google/callback',
     '/v1/user/auth/facebook/callback',
     '/v1/user/auth/google/native',
+    '/v1/user/auth/google/exchange',
     '/v1/user/google',
     '/v1/user/facebook',
     '/v1/user/login',
