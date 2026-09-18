@@ -1,7 +1,6 @@
 import logger from './services/logger.service';
 import express from 'express';
 import passport from 'passport';
-import session from 'express-session';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import compression from 'compression';
@@ -32,15 +31,6 @@ dotenv.config();
 function configureExpressApp(): express.Application {
   const app = express();
   const isProduction = process.env.NODE_ENV === 'production';
-  const sessionSecret = process.env.SECRET_KEY;
-
-  if (!sessionSecret) {
-    throw new Error(
-      '[server]: SECRET_KEY is required for session management. ' +
-        'Please set it in your .env file. ' +
-        "Generate a secure key with: node -e \"console.log(require('crypto').randomBytes(64).toString('hex'))\""
-    );
-  }
 
   // Needed for secure cookies when behind a proxy (Railway/Render/Heroku)
   app.set('trust proxy', 1);
@@ -58,22 +48,7 @@ function configureExpressApp(): express.Application {
   // Request/Response logging
   app.use(requestLogger);
 
-  app.use(
-    session({
-      secret: sessionSecret as string,
-      resave: false,
-      saveUninitialized: true,
-      cookie: {
-        httpOnly: true,
-        sameSite: isProduction ? 'none' : 'lax',
-        secure: isProduction, // requires HTTPS when true
-        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-      },
-    })
-  );
-
   app.use(passport.initialize());
-  app.use(passport.session());
 
   app.use(cors(corsOptions));
   app.options(/^.*$/, cors(corsOptions));

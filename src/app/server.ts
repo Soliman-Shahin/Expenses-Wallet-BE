@@ -20,7 +20,6 @@ function validateEnvironmentVariables(): void {
     'ACCESS_TOKEN_SECRET',
     'REFRESH_TOKEN_SECRET',
     'ENCRYPTION_KEY',
-    'SECRET_KEY',
   ];
 
   const missing = required.filter((key) => !process.env[key]);
