@@ -15,6 +15,7 @@ export interface ISyncOperation extends Document {
 }
 
 export interface IConflictResolution extends Document {
+  conflictId?: Types.ObjectId;
   entityId: string;
   entityType: string;
   localData: any;
@@ -23,6 +24,20 @@ export interface IConflictResolution extends Document {
   mergedData?: any;
   timestamp: Date;
   user: Types.ObjectId;
+}
+
+export interface ISyncConflict extends Document {
+  dedupeKey: string;
+  entityId: string;
+  entityType: string;
+  localData: any;
+  serverData: any;
+  user: Types.ObjectId;
+  detectedAt: Date;
+  resolvedAt?: Date;
+  resolutionState?: 'resolving' | 'resolved';
+  claimedResolution?: 'local' | 'server' | 'merge';
+  appliedRevision?: number;
 }
 
 export interface ISyncMetadata extends Document {
@@ -67,6 +82,7 @@ const syncOperationSchema = new Schema(
 
 const conflictResolutionSchema = new Schema(
   {
+    conflictId: { type: Schema.Types.ObjectId, ref: 'SyncConflict' },
     entityId: { type: String, required: true },
     entityType: { type: String, required: true },
     localData: { type: Schema.Types.Mixed, required: true },
@@ -81,6 +97,23 @@ const conflictResolutionSchema = new Schema(
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true }
+);
+
+const syncConflictSchema = new Schema<ISyncConflict>(
+  {
+    dedupeKey: { type: String, required: true, unique: true },
+    entityId: { type: String, required: true },
+    entityType: { type: String, required: true },
+    localData: { type: Schema.Types.Mixed, required: true },
+    serverData: { type: Schema.Types.Mixed, required: true },
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    detectedAt: { type: Date, default: Date.now },
+    resolvedAt: { type: Date },
+    resolutionState: { type: String, enum: ['resolving', 'resolved'] },
+    claimedResolution: { type: String, enum: ['local', 'server', 'merge'] },
+    appliedRevision: { type: Number },
+  },
+  { timestamps: true, collection: 'sync_conflicts' }
 );
 
 const syncMetadataSchema = new Schema(
@@ -108,6 +141,11 @@ syncOperationSchema.index({ user: 1, timestamp: -1 });
 
 conflictResolutionSchema.index({ user: 1, timestamp: -1 });
 conflictResolutionSchema.index({ entityId: 1, entityType: 1 });
+conflictResolutionSchema.index(
+  { conflictId: 1 },
+  { unique: true, sparse: true }
+);
+syncConflictSchema.index({ user: 1, resolvedAt: 1, detectedAt: -1 });
 
 export const SyncOperation = model<ISyncOperation>(
   'SyncOperation',
@@ -116,6 +154,10 @@ export const SyncOperation = model<ISyncOperation>(
 export const ConflictResolution = model<IConflictResolution>(
   'ConflictResolution',
   conflictResolutionSchema
+);
+export const SyncConflict = model<ISyncConflict>(
+  'SyncConflict',
+  syncConflictSchema
 );
 export const SyncMetadata = model<ISyncMetadata>(
   'SyncMetadata',

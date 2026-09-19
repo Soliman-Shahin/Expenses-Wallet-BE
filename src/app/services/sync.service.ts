@@ -5,10 +5,15 @@ import { User } from '../models/user.model';
 import {
   SyncOperation,
   ConflictResolution,
+  SyncConflict,
   SyncMetadata,
 } from '../models/sync.model';
 import mongoose from 'mongoose';
 import { CategoryService } from './category.service';
+import { NotificationService } from './notification.service';
+
+const conflictDedupeKey = (userId: string, entity: any, server: any): string =>
+  `${userId}:${String(entity._entityType || 'unknown')}:${String(entity._id || entity._clientId || 'unknown')}:${String(entity._version || entity._lastModified || 'unknown')}:${String(server?._version || server?._lastModified || 'unknown')}`;
 
 export interface SyncRequest {
   lastSyncTime?: Date;
@@ -26,6 +31,7 @@ export interface SyncResponse {
 }
 
 export interface ConflictResolutionRequest {
+  conflictId?: string;
   entityId: string;
   entityType: string;
   resolution: 'local' | 'server' | 'merge';
@@ -234,6 +240,8 @@ export class SyncService {
 
           if (result.conflict) {
             conflicts.push(result.entity);
+            const conflictId = await this.recordConflict(userId, result.entity);
+            result.entity.conflictId = conflictId;
             logger.info(
               `⚠️ [SYNC] Conflict detected for ${entity._entityType}:${entity._id}`
             );
@@ -269,6 +277,60 @@ export class SyncService {
     }
   }
 
+  private async recordConflict(userId: string, conflict: any): Promise<string> {
+    const entityType = String(conflict._entityType || 'unknown');
+    const entityId = String(conflict._id || conflict._clientId || 'unknown');
+    const localVersion = String(
+      conflict._version || conflict._lastModified || 'unknown'
+    );
+    const serverVersion = String(
+      conflict._conflictData?._version ||
+        conflict._conflictData?._lastModified ||
+        'unknown'
+    );
+    const dedupeKey = `${userId}:${entityType}:${entityId}:${localVersion}:${serverVersion}`;
+    let record;
+    try {
+      record = await SyncConflict.findOneAndUpdate(
+        { dedupeKey },
+        {
+          $setOnInsert: {
+            dedupeKey,
+            entityId,
+            entityType,
+            localData: conflict,
+            serverData: conflict._conflictData,
+            user: new mongoose.Types.ObjectId(userId),
+            detectedAt: new Date(),
+          },
+        },
+        { upsert: true, new: false }
+      ).lean();
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        const duplicate = await SyncConflict.findOne({ dedupeKey })
+          .select('_id')
+          .lean();
+        return String(duplicate?._id || dedupeKey);
+      }
+      throw error;
+    }
+    if (record) return String(record._id);
+    await NotificationService.dispatchUserEvent({
+      userId,
+      event: 'sync.conflict',
+      dedupeKey,
+      title: 'Sync conflict detected / تم اكتشاف تعارض في المزامنة',
+      message:
+        'Review the affected item to choose a version. / راجع العنصر المتأثر لاختيار نسخة.',
+      metadata: { conflictId: dedupeKey, entityType },
+    });
+    const persisted = await SyncConflict.findOne({ dedupeKey })
+      .select('_id')
+      .lean();
+    return String(persisted?._id || dedupeKey);
+  }
+
   /**
    * معالجة entity واحدة
    */
@@ -281,6 +343,7 @@ export class SyncService {
       _entityType,
       _id,
       _version,
+      _baseVersion,
       _lastModified,
       _isDeleted,
       _syncError,
@@ -343,11 +406,15 @@ export class SyncService {
       }
 
       // Check for conflicts
-      if (existingEntity && this.hasConflict(existingEntity, entity)) {
+      if (existingEntity && this.hasConflict(existingEntity, _baseVersion)) {
         logger.info(`⚠️ [SYNC] Conflict for ${_entityType}:${_id}`);
         return {
           conflict: true,
-          entity: { ...entity, _conflictData: existingEntity.toObject() },
+          entity: {
+            ...entity,
+            conflictId: conflictDedupeKey(userId, entity, existingEntity),
+            _conflictData: existingEntity.toObject(),
+          },
         };
       }
 
@@ -357,16 +424,49 @@ export class SyncService {
 
       // Process based on operation
       if (_isDeleted) {
-        await this.handleDelete(Model, targetId, userId);
+        const deleted = await this.handleDelete(
+          Model,
+          targetId,
+          userId,
+          _baseVersion
+        );
+        if (!deleted) {
+          const current = await Model.findOne({
+            _id: targetId,
+            user: userObjectId,
+          });
+          return {
+            conflict: true,
+            entity: {
+              ...entity,
+              conflictId: conflictDedupeKey(userId, entity, current),
+              _conflictData: current?.toObject(),
+            },
+          };
+        }
         logger.info(`🗑️ [SYNC] Deleted ${_entityType}:${targetId}`);
       } else if (existingEntity) {
-        await this.handleUpdate(
+        const updated = await this.handleUpdate(
           Model,
           targetId,
           userId,
           entityData,
-          _version || 1
+          _baseVersion
         );
+        if (!updated) {
+          const current = await Model.findOne({
+            _id: targetId,
+            user: userObjectId,
+          });
+          return {
+            conflict: true,
+            entity: {
+              ...entity,
+              conflictId: conflictDedupeKey(userId, entity, current),
+              _conflictData: current?.toObject(),
+            },
+          };
+        }
         logger.info(`✏️ [SYNC] Updated ${_entityType}:${targetId}`);
       } else {
         await this.handleCreate(
@@ -395,16 +495,10 @@ export class SyncService {
   /**
    * التحقق من وجود تعارض
    */
-  private hasConflict(existing: any, incoming: any): boolean {
-    const existingTime = new Date(
-      existing._lastModified || existing.updatedAt
-    ).getTime();
-    const incomingTime = new Date(incoming._lastModified).getTime();
-    const existingVersion = existing._version || 0;
-    const incomingVersion = incoming._version || 0;
-
-    // Conflict if server version is newer
-    return existingTime > incomingTime && existingVersion > incomingVersion;
+  private hasConflict(existing: any, baseVersion?: number): boolean {
+    return (
+      !Number.isInteger(baseVersion) || (existing._version || 0) !== baseVersion
+    );
   }
 
   /**
@@ -479,21 +573,23 @@ export class SyncService {
     id: string,
     userId: string,
     data: any,
-    version: number
-  ): Promise<void> {
+    version?: number
+  ): Promise<boolean> {
     const userObjectId = new mongoose.Types.ObjectId(userId);
-
-    await Model.updateOne(
-      { _id: id, user: userObjectId },
+    if (!Number.isInteger(version)) return false;
+    const expectedVersion = version as number;
+    const result = await Model.updateOne(
+      { _id: id, user: userObjectId, _version: expectedVersion },
       {
         $set: {
           ...data,
           _syncStatus: 'synced',
           _lastModified: new Date(),
-          _version: version + 1,
+          _version: expectedVersion + 1,
         },
       }
     );
+    return result.modifiedCount === 1;
   }
 
   /**
@@ -502,20 +598,24 @@ export class SyncService {
   private async handleDelete(
     Model: any,
     id: string,
-    userId: string
-  ): Promise<void> {
+    userId: string,
+    version?: number
+  ): Promise<boolean> {
     const userObjectId = new mongoose.Types.ObjectId(userId);
-
-    await Model.updateOne(
-      { _id: id, user: userObjectId },
+    if (!Number.isInteger(version)) return false;
+    const expectedVersion = version as number;
+    const result = await Model.updateOne(
+      { _id: id, user: userObjectId, _version: expectedVersion },
       {
         $set: {
           _isDeleted: true,
           _syncStatus: 'synced',
           _lastModified: new Date(),
+          _version: expectedVersion + 1,
         },
       }
     );
+    return result.modifiedCount === 1;
   }
 
   // ==================== CONFLICT RESOLUTION ====================
@@ -523,9 +623,9 @@ export class SyncService {
   async resolveConflict(
     userId: string,
     request: ConflictResolutionRequest
-  ): Promise<boolean> {
-    const { entityId, entityType, resolution, mergedData } = request;
-
+  ): Promise<any> {
+    const { conflictId, entityId, entityType, resolution, mergedData } =
+      request;
     logger.info(
       `🔧 [SYNC] Resolving conflict for ${entityType}:${entityId} with strategy: ${resolution}`
     );
@@ -546,48 +646,167 @@ export class SyncService {
           throw new Error(`Unknown entity type: ${entityType}`);
       }
 
-      const entity = await Model.findOne({ _id: entityId, user: userObjectId });
-      if (!entity) {
-        throw new Error('Entity not found');
+      const conflictQuery: any = conflictId
+        ? {
+            _id: conflictId,
+            user: userObjectId,
+          }
+        : {
+            entityId,
+            entityType,
+            user: userObjectId,
+            resolvedAt: { $exists: false },
+          };
+      const conflict: any = await SyncConflict.findOne(conflictQuery).lean();
+      if (!conflict) throw new Error('Conflict not found or already resolved');
+      if (conflict.entityId !== entityId || conflict.entityType !== entityType)
+        throw new Error('Conflict identity mismatch');
+
+      const priorResolution: any = await ConflictResolution.findOne({
+        conflictId: conflict._id,
+        user: userObjectId,
+      }).lean();
+      if (conflict.resolvedAt || priorResolution) {
+        if (!priorResolution || priorResolution.resolution !== resolution)
+          throw new Error('Conflict already resolved with a different choice');
+        await SyncConflict.updateOne(
+          { _id: conflict._id, user: userObjectId, resolvedAt: { $exists: false } },
+          { $set: { resolvedAt: new Date(), resolutionState: 'resolved' } }
+        );
+        const resolvedEntity = await Model.findOne({
+          _id: entityId,
+          user: userObjectId,
+        }).lean();
+        return {
+          conflictId: String(conflict._id),
+          entityType,
+          entityId,
+          entity: resolvedEntity,
+          resolution: 'resolved',
+        };
       }
+      const claimed = await SyncConflict.findOneAndUpdate(
+        {
+          _id: conflict._id,
+          user: userObjectId,
+          resolvedAt: { $exists: false },
+          $or: [
+            { resolutionState: { $exists: false } },
+            { resolutionState: 'resolving', claimedResolution: resolution },
+          ],
+        },
+        { $set: { resolutionState: 'resolving', claimedResolution: resolution } },
+        { new: true }
+      ).lean();
+      if (!claimed) throw new Error('Conflict already claimed with a different choice');
+      const entity = await Model.findOne({ _id: entityId, user: userObjectId });
+      if (!entity) throw new Error('Entity not found');
+      const expectedVersion = Number(conflict.serverData?._version);
+      if (!Number.isInteger(expectedVersion))
+        throw new Error('Conflict revision is invalid');
 
       let resolvedData: any;
 
       if (resolution === 'local') {
-        resolvedData = entity.toObject();
-      } else if (resolution === 'server') {
-        resolvedData = entity._conflictData || entity.toObject();
+        resolvedData = conflict.localData;
       } else if (resolution === 'merge') {
-        resolvedData = mergedData || entity.toObject();
+        if (
+          !mergedData ||
+          typeof mergedData !== 'object' ||
+          Array.isArray(mergedData)
+        )
+          throw new Error('Merged data is required');
+        resolvedData = mergedData;
       }
 
-      // Update entity
-      await Model.updateOne(
-        { _id: entityId, user: userObjectId },
+      const {
+        _id: ignoredId,
+        user: ignoredUser,
+        createdAt: ignoredCreatedAt,
+        updatedAt: ignoredUpdatedAt,
+        __v: ignoredVersionKey,
+        _version: ignoredRevision,
+        _syncStatus: ignoredSyncStatus,
+        _lastModified: ignoredLastModified,
+        _resolutionConflictId: ignoredResolutionMarker,
+        _conflictData: ignoredConflictData,
+        ...writableData
+      } = resolvedData || {};
+
+      // Use Server is a conditional no-op CAS: the authoritative server data
+      // is already current, so resolution must not rewrite it or advance its
+      // revision. Local and Merge intentionally mutate the entity and advance it.
+      const entityAlreadyApplied =
+        resolution !== 'server' &&
+        String((entity as any)._resolutionConflictId || '') === String(conflict._id) &&
+        Number(entity._version) === expectedVersion + 1;
+      const updateResult =
+        resolution === 'server'
+          ? await Model.updateOne(
+              { _id: entityId, user: userObjectId, _version: expectedVersion },
+              { $set: { _version: expectedVersion } }
+            )
+          : entityAlreadyApplied
+          ? { matchedCount: 1 }
+          : await Model.updateOne(
+              { _id: entityId, user: userObjectId, _version: expectedVersion },
+              {
+                $set: {
+                  ...writableData,
+                  _syncStatus: 'synced',
+                  _lastModified: new Date(),
+                  _version: expectedVersion + 1,
+                  _resolutionConflictId: String(conflict._id),
+                },
+                $unset: { _conflictData: 1 },
+              }
+            );
+      if (updateResult.matchedCount !== 1)
+        throw new Error('SYNC_CONFLICT_STALE_RESOLUTION');
+      await SyncConflict.updateOne(
+        { _id: conflict._id, user: userObjectId, resolvedAt: { $exists: false } },
         {
           $set: {
-            ...resolvedData,
-            _syncStatus: 'synced',
-            _lastModified: new Date(),
-            _version: (entity._version || 0) + 1,
+            appliedRevision:
+              resolution === 'server' ? expectedVersion : expectedVersion + 1,
           },
-          $unset: { _conflictData: 1 },
         }
       );
+      const resolvedEntity = await Model.findOne({
+        _id: entityId,
+        user: userObjectId,
+      }).lean();
 
       // Record resolution
       await ConflictResolution.create({
+        conflictId: conflict._id,
         entityId,
         entityType,
         localData: entity.toObject(),
-        serverData: entity._conflictData,
+        serverData: conflict.serverData,
         resolution,
         mergedData,
         user: userObjectId,
       });
+      await SyncConflict.updateOne(
+        {
+          _id: conflict._id,
+          user: userObjectId,
+          entityId,
+          entityType,
+          resolvedAt: { $exists: false },
+        },
+        { $set: { resolvedAt: new Date(), resolutionState: 'resolved' } }
+      );
 
       logger.info(`✅ [SYNC] Conflict resolved for ${entityType}:${entityId}`);
-      return true;
+      return {
+        conflictId: String(conflict._id),
+        entityType,
+        entityId,
+        entity: resolvedEntity,
+        resolution: 'resolved',
+      };
     } catch (error: any) {
       logger.error('❌ [SYNC] Conflict resolution error:', error);
       throw new Error(`Failed to resolve conflict: ${error.message}`);
@@ -597,12 +816,22 @@ export class SyncService {
   async getConflicts(userId: string): Promise<any[]> {
     try {
       const userObjectId = new mongoose.Types.ObjectId(userId);
-      const conflicts = await ConflictResolution.find({ user: userObjectId })
-        .sort({ timestamp: -1 })
+      const conflicts = await SyncConflict.find({
+        user: userObjectId,
+        resolvedAt: { $exists: false },
+      })
+        .sort({ detectedAt: -1 })
         .limit(50)
         .lean();
 
-      return conflicts;
+      return conflicts.map((conflict: any) => ({
+        conflictId: String(conflict._id),
+        entityId: conflict.entityId,
+        entityType: conflict.entityType,
+        localData: conflict.localData,
+        serverData: conflict.serverData,
+        timestamp: conflict.detectedAt,
+      }));
     } catch (error) {
       logger.error('❌ [SYNC] Get conflicts error:', error as Error);
       return [];

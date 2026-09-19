@@ -156,11 +156,11 @@ export class SyncController {
         return;
       }
 
-      const success = await this.syncService.resolveConflict(
+      const result = await this.syncService.resolveConflict(
         userId,
         conflictData
       );
-      sendSuccess(res, { success }, 'Conflict resolved successfully');
+      sendSuccess(res, result, 'Conflict resolved successfully');
     } catch (error) {
       next(error);
     }

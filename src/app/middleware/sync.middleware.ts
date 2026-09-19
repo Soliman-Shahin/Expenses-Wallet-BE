@@ -65,6 +65,18 @@ export const handleSyncError = (
   if (req.path.includes('/sync/') || req.originalUrl?.includes('/sync/')) {
     logger.error('Sync error:', error);
 
+    if (
+      String(error?.message || '').includes('SYNC_CONFLICT_STALE_RESOLUTION')
+    ) {
+      sendError(
+        res,
+        'The conflict is no longer based on the current server version',
+        409,
+        'SYNC_CONFLICT_STALE_RESOLUTION'
+      );
+      return;
+    }
+
     // Update sync metadata with error
     const userId = (req as any).user?._id;
     if (userId) {

@@ -9,6 +9,10 @@ export interface NotificationDocument extends Document {
   type: NotificationType;
   audience: NotificationAudience;
   routeKey: 'notification-detail';
+  event?: string;
+  category?: string;
+  dedupeKey?: string;
+  metadata?: Record<string, unknown>;
   createdBy: Types.ObjectId;
   status: 'created' | 'dispatched' | 'partial' | 'failed';
   recipientCount: number;
@@ -41,6 +45,10 @@ const NotificationSchema = new Schema<NotificationDocument>(
       enum: ['notification-detail'],
       default: 'notification-detail',
     },
+    event: { type: String },
+    category: { type: String },
+    dedupeKey: { type: String },
+    metadata: { type: Schema.Types.Mixed },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     status: {
       type: String,
@@ -60,6 +68,10 @@ const NotificationSchema = new Schema<NotificationDocument>(
 
 NotificationSchema.index({ createdAt: -1 });
 NotificationSchema.index({ audience: 1, createdAt: -1 });
+NotificationSchema.index(
+  { event: 1, dedupeKey: 1 },
+  { unique: true, sparse: true }
+);
 
 export const Notification = model<NotificationDocument>(
   'Notification',

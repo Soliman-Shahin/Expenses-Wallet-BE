@@ -33,13 +33,16 @@ export class SocketService {
     // Middleware for authentication
     this.io.use((socket, next) => {
       const token = socket.handshake.auth.token;
-      
+
       if (!token) {
         return next(new Error('Authentication error: Token missing'));
       }
 
       try {
-        const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET as string);
+        const decoded = jwt.verify(
+          token,
+          process.env.ACCESS_TOKEN_SECRET as string
+        );
         (socket as any).user = decoded; // Store user data in socket
         next();
       } catch (err) {
@@ -49,13 +52,16 @@ export class SocketService {
 
     this.io.on('connection', (socket: Socket) => {
       logger.info(`[Socket.io] Client connected: ${socket.id}`);
-      
+
       // We can join rooms based on role if needed
       const user = (socket as any).user;
       if (user && user.role) {
         socket.join(user.role);
-        logger.info(`[Socket.io] User ${user.id} joined role room: ${user.role}`);
+        logger.info(
+          `[Socket.io] User ${user.id} joined role room: ${user.role}`
+        );
       }
+      if (user && user.id) socket.join(`user:${String(user.id)}`);
 
       socket.on('disconnect', () => {
         logger.info(`[Socket.io] Client disconnected: ${socket.id}`);
@@ -70,7 +76,7 @@ export class SocketService {
       ...notification,
       id: notification.id || crypto.randomUUID(),
       isRead: false,
-      createdAt: notification.createdAt || new Date()
+      createdAt: notification.createdAt || new Date(),
     };
 
     if (role && role !== 'all') {
@@ -79,6 +85,21 @@ export class SocketService {
       this.io.emit('ReceiveNotification', enrichedNotification);
     }
     logger.info(`[Socket.io] Broadcasted notification: ${notification.title}`);
+  }
+
+  public sendNotificationToUser(
+    userId: string,
+    notification: RichNotification
+  ) {
+    const enrichedNotification = {
+      ...notification,
+      id: notification.id || crypto.randomUUID(),
+      isRead: false,
+      createdAt: notification.createdAt || new Date(),
+    };
+    this.io
+      .to(`user:${userId}`)
+      .emit('ReceiveNotification', enrichedNotification);
   }
 }
 

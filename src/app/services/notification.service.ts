@@ -15,6 +15,8 @@ import {
   NotificationCategory,
   NotificationChannel,
   NotificationPolicy,
+  definitionForEvent,
+  NotificationEvent,
 } from '../notifications/notification-taxonomy';
 
 interface BroadcastInput {
@@ -26,6 +28,80 @@ interface BroadcastInput {
 }
 
 export class NotificationService {
+  static async dispatchUserEvent(input: {
+    userId: string;
+    event: NotificationEvent;
+    dedupeKey: string;
+    title: string;
+    message: string;
+    metadata?: Record<string, unknown>;
+  }) {
+    const definition = definitionForEvent(input.event);
+    const channels = await this.resolveChannelsForUser(
+      input.userId,
+      definition.category,
+      definition.policy
+    );
+    let notification;
+    try {
+      notification = await Notification.create({
+        title: input.title,
+        message: input.message,
+        type: 'warn',
+        audience: 'all',
+        createdBy: new Types.ObjectId(input.userId),
+        routeKey: 'notification-detail',
+        event: input.event,
+        category: definition.category,
+        dedupeKey: input.dedupeKey,
+        metadata: input.metadata,
+      });
+    } catch (error: any) {
+      if (error?.code === 11000) return { created: false, channels };
+      throw error;
+    }
+    const userObjectId = new Types.ObjectId(input.userId);
+    if (channels.includes('inbox')) {
+      await UserNotification.updateOne(
+        { notificationId: notification._id, userId: userObjectId },
+        {
+          $setOnInsert: {
+            notificationId: notification._id,
+            userId: userObjectId,
+          },
+        },
+        { upsert: true }
+      );
+    }
+    const payload = {
+      id: notification._id.toString(),
+      title: input.title,
+      message: input.message,
+      type: 'warn' as const,
+      event: input.event,
+      category: definition.category,
+      metadata: input.metadata,
+      createdAt: notification.createdAt,
+    };
+    if (channels.includes('realtime')) {
+      getSocketService().sendNotificationToUser(input.userId, payload);
+    }
+    if (channels.includes('push')) {
+      await PushDeliveryService.sendToUsers({
+        userIds: [userObjectId],
+        notificationId: notification._id.toString(),
+        title: input.title,
+        message: input.message,
+        type: 'warn',
+        routeKey: 'notification-detail',
+      });
+    }
+    return {
+      created: true,
+      channels,
+      notificationId: notification._id.toString(),
+    };
+  }
   static async resolveChannelsForUser(
     userId: string,
     category: NotificationCategory,
@@ -46,7 +122,7 @@ export class NotificationService {
       .limit(safeLimit)
       .populate({
         path: 'notificationId',
-        select: 'title message type routeKey createdAt',
+        select: 'title message type routeKey event category metadata createdAt',
       })
       .lean();
     const total = await UserNotification.countDocuments({
@@ -65,6 +141,9 @@ export class NotificationService {
           message: row.notificationId.message,
           type: row.notificationId.type,
           routeKey: row.notificationId.routeKey,
+          event: row.notificationId.event,
+          category: row.notificationId.category,
+          metadata: row.notificationId.metadata,
           isRead: !!row.readAt,
           createdAt: row.notificationId.createdAt,
         })),
@@ -181,6 +260,9 @@ export class NotificationService {
       message: notification.message,
       type: notification.type,
       routeKey: notification.routeKey,
+      event: notification.event,
+      category: notification.category,
+      metadata: notification.metadata,
       isRead: !!userNotification.readAt,
       createdAt: notification.createdAt,
     };

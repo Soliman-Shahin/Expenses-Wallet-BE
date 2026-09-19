@@ -14,6 +14,7 @@ export interface ICategory extends Document {
   _syncStatus?: 'synced' | 'pending' | 'conflict' | 'error' | 'offline';
   _lastModified?: Date;
   _version?: number;
+  _resolutionConflictId?: string;
   _isDeleted?: boolean;
   _conflictData?: any;
   _clientId?: string;
@@ -44,6 +45,7 @@ const categorySchema = new Schema(
     },
     _lastModified: { type: Date, default: Date.now },
     _version: { type: Number, default: 1 },
+    _resolutionConflictId: { type: String },
     _isDeleted: { type: Boolean, default: false },
     _conflictData: { type: Schema.Types.Mixed },
     _clientId: { type: String },

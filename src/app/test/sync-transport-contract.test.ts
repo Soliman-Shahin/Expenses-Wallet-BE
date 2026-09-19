@@ -63,14 +63,17 @@ describe('sync transport contract', () => {
     expect(created.idMap[categoryId]).toBeDefined();
     expect(created.idMap[expenseId]).toBeDefined();
     const serverExpenseId = created.idMap[expenseId];
-    expect(
-      await Expense.exists({ _id: serverExpenseId, user: userId })
-    ).toBeTruthy();
+    const createdExpense = await Expense.findOne({
+      _id: serverExpenseId,
+      user: userId,
+    });
+    expect(createdExpense).toBeTruthy();
 
     const deleted = await service.pushData(userId, [
       {
         _id: serverExpenseId,
         _entityType: 'expense',
+        _baseVersion: createdExpense?._version,
         _isDeleted: true,
         _operationId: 'delete-contract-operation',
       },
