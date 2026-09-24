@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { User, BiometricCredential } from '../models';
 import userRoutes from '../routes/user.route';
 import { BiometricCredentialService } from '../services/biometric-credential.service';
+import { NotificationService } from '../services/notification.service';
 
 const app = express();
 app.use(express.json());
@@ -17,6 +18,16 @@ async function account(email = `bio-${Date.now()}@example.test`) {
 async function access(user: any) { return user.generateAccessAuthToken(); }
 
 describe('AUTH.5 biometric sign-in backend', () => {
+  let dispatch: jest.SpiedFunction<typeof NotificationService.dispatchUserEvent>;
+
+  beforeEach(() => {
+    dispatch = jest
+      .spyOn(NotificationService, 'dispatchUserEvent')
+      .mockResolvedValue({ created: true, channels: ['inbox', 'realtime', 'push'] });
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
   it('enrolls a 256-bit credential and persists only its hash', async () => {
     const user = await account();
     const response = await request(app).post('/v1/user/biometric/enroll').set('Authorization', `Bearer ${await access(user)}`).send({ deviceId: 'install-a', label: 'My phone', platform: 'android' });
@@ -50,9 +61,15 @@ describe('AUTH.5 biometric sign-in backend', () => {
     const enrolled = await request(app).post('/v1/user/biometric/enroll').set('Authorization', `Bearer ${token}`).send({ deviceId: 'sign-in', label: 'Phone', platform: 'android' });
     const response = await request(app).post('/v1/user/biometric/signin').send({ deviceId: 'sign-in', credential: enrolled.body.data.credential });
     expect(response.status).toBe(200); expect(response.body.data.tokens.accessToken).toBeTruthy(); expect(response.body.data.tokens.refreshToken).toBeTruthy();
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch.mock.calls[0][0].metadata).toEqual({
+      authenticationMethod: 'biometric',
+      occurredAt: expect.any(String),
+    });
     const saved = await BiometricCredential.findOne({ userId: user._id, deviceId: 'sign-in' }); expect(saved?.lastUsedAt).toBeTruthy();
     const bad = await request(app).post('/v1/user/biometric/signin').send({ deviceId: 'unknown', credential: 'bad' });
     expect(bad.status).toBe(401); expect(bad.body.error.code).toBe('BIOMETRIC_AUTH_FAILED');
+    expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
   it('revokes the current credential and password reset revokes all credentials', async () => {
@@ -62,5 +79,6 @@ describe('AUTH.5 biometric sign-in backend', () => {
     expect((await request(app).delete('/v1/user/biometric/current').set('Authorization', `Bearer ${token}`).send({ deviceId: 'a' })).status).toBe(200);
     expect((await BiometricCredentialService.revokeAllForUser(user.id, 'password_reset')).modifiedCount).toBe(1);
     expect(await BiometricCredential.countDocuments({ userId: user._id, revokedAt: { $exists: true } })).toBe(2);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

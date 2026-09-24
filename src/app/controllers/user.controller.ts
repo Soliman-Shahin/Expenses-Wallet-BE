@@ -134,9 +134,8 @@ const login = async (req: CustomRequest, res: Response) => {
       ip,
     });
 
-    const accessToken = await UserService.generateAccessToken(user);
-    const refreshToken = await UserService.generateRefreshToken();
-    await UserService.addRefreshToken(user, refreshToken);
+    const { accessToken, refreshToken } =
+      await UserService.createAuthenticatedSession(user, 'password');
 
     // Also return tokens in headers for legacy frontend compatibility
     res.setHeader('access-token', accessToken);

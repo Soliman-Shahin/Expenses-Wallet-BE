@@ -59,6 +59,7 @@ describe('AUTH.1 session contract', () => {
         json: async () => ({
           sub: 'test-google-subject',
           email: user.email,
+          aud: process.env.GOOGLE_WEB_CLIENT_ID,
           email_verified: true,
         }),
       } as any);

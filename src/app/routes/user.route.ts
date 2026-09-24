@@ -20,6 +20,7 @@ import {
   biometricSignIn,
   revokeCurrentBiometric,
 } from '../controllers';
+import { UserService } from '../services/user.service';
 import { verifyAccessToken } from '../middleware/access.middleware';
 import { validateRequestWithZod, verifySession } from '../middleware';
 import { loginSchema, signUpSchema } from '../validations/user.validation';
@@ -212,8 +213,8 @@ router.post(
         .json({ success: false, message: 'Invalid or expired exchange code' });
     }
 
-    const refreshToken = await user.createSession();
-    const accessToken = await user.generateAccessAuthToken();
+    const { refreshToken, accessToken } =
+      await UserService.createAuthenticatedSession(user, 'google_web');
     const { password, sessions, image, ...userWithoutSecrets } = user.toJSON();
     const safeUser = {
       ...userWithoutSecrets,
@@ -373,10 +374,10 @@ router.post('/auth/google/native', async (req: Request, res: Response) => {
       if (mutated) await (user as any).save();
     }
 
-    if (user!._isDeleted || user!.isActive === false)
+    if (!user || user._isDeleted || user.isActive === false)
       return res.status(401).json({ message: 'Account unavailable' });
-    const refreshToken = await (user as any).createSession();
-    const accessToken = await (user as any).generateAccessAuthToken();
+    const { refreshToken, accessToken } =
+      await UserService.createAuthenticatedSession(user, 'google_native');
 
     const rawUser = (user as any).toJSON ? (user as any).toJSON() : user;
     const { password, sessions, ...safeUser } = rawUser;

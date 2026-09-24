@@ -2,17 +2,19 @@ import { Response } from 'express';
 import { omit } from 'lodash';
 import { UserDocument } from '../../models';
 import { sendSuccess } from './api-response';
+import { UserService } from '../../services/user.service';
 
 // Helper function for generating tokens
-const generateTokens = async (user: UserDocument) => {
-  const refreshToken = await user.createSession();
-  const accessToken = await user.generateAccessAuthToken();
-  return { refreshToken, accessToken };
-};
-
 // Helper function for sending user and tokens
-const sendUserAndTokens = async (res: Response, user: UserDocument) => {
-  const tokens = await generateTokens(user);
+const sendUserAndTokens = async (
+  res: Response,
+  user: UserDocument,
+  authenticationMethod: 'biometric' = 'biometric'
+) => {
+  const tokens = await UserService.createAuthenticatedSession(
+    user,
+    authenticationMethod
+  );
   const userResponse = {
     user: omit(user.toJSON(), ['password', 'sessions']),
     tokens,

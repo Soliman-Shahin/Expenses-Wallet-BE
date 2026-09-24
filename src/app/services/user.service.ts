@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { config } from 'dotenv';
+import { NotificationService } from './notification.service';
+import logger from './logger.service';
 config();
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET!;
@@ -22,6 +24,38 @@ function hashToken(token: string): string {
 }
 
 export class UserService {
+  static async createAuthenticatedSession(
+    user: UserDocument,
+    authenticationMethod:
+      | 'password'
+      | 'google_web'
+      | 'google_native'
+      | 'biometric'
+  ): Promise<{ accessToken: string; refreshToken: string }> {
+    const refreshToken = await this.generateRefreshToken();
+    await this.addRefreshToken(user, refreshToken);
+    const accessToken = await this.generateAccessToken(user);
+    const occurredAt = new Date().toISOString();
+
+    try {
+      await NotificationService.dispatchUserEvent({
+        userId: user._id.toString(),
+        event: 'security.new_login',
+        dedupeKey: `security.new_login:${hashToken(refreshToken)}`,
+        title: 'New login',
+        message: 'A new authenticated session was created.',
+        metadata: { authenticationMethod, occurredAt },
+      });
+    } catch (error: any) {
+      logger.warn('Security login notification dispatch failed', {
+        userId: user._id.toString(),
+        error: error?.message || 'unknown error',
+      });
+    }
+
+    return { accessToken, refreshToken };
+  }
+
   // Create a new user
   static async createUser(
     email: string,
