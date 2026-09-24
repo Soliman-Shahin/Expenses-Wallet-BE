@@ -16,6 +16,9 @@ jest.mock('../services/push-delivery.service', () => ({
 import { Notification } from '../models/notification.model';
 import { NotificationPreferenceService } from '../services/notification-preference.service';
 import { SyncConflict } from '../models/sync.model';
+import { SyncFailure } from '../models/sync-failure.model';
+import { Category } from '../models/category.model';
+import { Expense } from '../models/expense.model';
 import { UserNotification } from '../models/user-notification.model';
 import { SyncService } from '../services/sync.service';
 
@@ -58,6 +61,7 @@ describe('sync.conflict notification producer', () => {
     expect(await Notification.countDocuments({ event: 'sync.conflict' })).toBe(
       1
     );
+    expect(await SyncFailure.countDocuments({ user: userId })).toBe(0);
     expect(await UserNotification.countDocuments({ userId })).toBe(1);
     const notification = await Notification.findOne({
       event: 'sync.conflict',
@@ -182,5 +186,165 @@ describe('sync.conflict notification producer', () => {
       })
     );
     expect(conflicts[0]).not.toHaveProperty('dedupeKey');
+  });
+
+  it('counts backend-observed failures and dispatches exactly once at failure three', async () => {
+    const service = new SyncService();
+    const failedEntity = {
+      _operationId: 'operation-1',
+      _entityType: 'expense',
+      _id: 'offline-failed-expense',
+      description: 'Invalid expense',
+      amount: 10,
+      date: new Date().toISOString(),
+    };
+
+    for (const expected of [1, 2]) {
+      const result = await service.pushData(userId, [failedEntity]);
+      expect(result.errors).toHaveLength(1);
+      expect(await Notification.countDocuments({ event: 'sync.repeated_failure' })).toBe(0);
+      expect((await SyncFailure.findOne({ user: userId }))?.attemptCount).toBe(expected);
+    }
+    const third = await service.pushData(userId, [failedEntity]);
+    expect(third.errors).toHaveLength(1);
+    expect(await Notification.countDocuments({ event: 'sync.repeated_failure' })).toBe(1);
+    const failure = await SyncFailure.findOne({ user: userId });
+    expect(failure?.terminal).toBe(true);
+
+    await service.pushData(userId, [failedEntity]);
+
+    const repeatedNotifications = await Notification.find({ event: 'sync.repeated_failure' }).lean();
+    expect(repeatedNotifications).toHaveLength(1);
+    expect(repeatedNotifications[0].dedupeKey).toMatch(`${userId}:sync-repeated-failure:`);
+    const notification = await Notification.findOne({
+      event: 'sync.repeated_failure',
+    }).lean();
+    expect(notification?.metadata).toEqual(
+      expect.objectContaining({
+        operationId: 'operation-1',
+        registrationId: expect.any(String),
+        entityType: 'expense',
+        entityId: 'offline-failed-expense',
+        failureCount: 3,
+      })
+    );
+    expect(JSON.stringify(notification?.metadata)).not.toContain('Invalid expense');
+  });
+
+  it('does not trust forged retry metadata or client sync errors', async () => {
+    const service = new SyncService();
+    const categoryId = 'offline-safe-category';
+    await service.pushData(userId, [
+      {
+        _operationId: 'operation-forged',
+        _retryCount: 999999,
+        _maxRetries: 1,
+        _syncError: 'fabricated failure',
+        _entityType: 'category',
+        _id: categoryId,
+        title: 'Safe category',
+        icon: 'tag-outline',
+        color: '#3366ff',
+        type: 'outcome',
+        order: 0,
+      },
+    ]);
+    expect(await Notification.countDocuments({ event: 'sync.repeated_failure' })).toBe(0);
+    expect(await SyncFailure.countDocuments({ user: userId })).toBe(0);
+  });
+
+  it('does not create failure state for malformed or arbitrary operation identities', async () => {
+    const service = new SyncService();
+    const invalidEntity = {
+      _entityType: 'expense',
+      _id: 'offline-invalid-operation',
+      description: 'Invalid expense',
+      amount: 10,
+      date: new Date().toISOString(),
+    };
+    for (const operationId of ['', 'x', 'bad id', 'a'.repeat(65)]) {
+      await service.pushData(userId, [
+        { ...invalidEntity, _operationId: operationId, _retryCount: -1, _maxRetries: 1 },
+      ]);
+    }
+    expect(await SyncFailure.countDocuments({ user: userId })).toBe(0);
+    expect(await Notification.countDocuments({ event: 'sync.repeated_failure' })).toBe(0);
+  });
+
+  it('isolates the same durable operation id across authenticated users', async () => {
+    const service = new SyncService();
+    const failedEntity = {
+      _operationId: 'shared-operation',
+      _entityType: 'expense',
+      _id: 'offline-shared-failure',
+      description: 'Invalid expense',
+      amount: 10,
+      date: new Date().toISOString(),
+    };
+    const otherUser = '507f1f77bcf86cd799439013';
+    for (let i = 0; i < 3; i++) {
+      await service.pushData(userId, [failedEntity]);
+      await service.pushData(otherUser, [failedEntity]);
+    }
+    expect(await SyncFailure.countDocuments({ operationId: 'shared-operation' })).toBe(2);
+    expect(await Notification.countDocuments({ event: 'sync.repeated_failure' })).toBe(2);
+  });
+
+  it('isolates success, conflict, and ordinary failure in one push batch', async () => {
+    const category = await Category.create({
+      title: 'Mixed batch category',
+      icon: 'folder',
+      color: '#123456',
+      user: userId,
+      _version: 1,
+    });
+    const existingExpense = await Expense.create({
+      description: 'Existing expense',
+      amount: 100,
+      category: category._id,
+      date: new Date(),
+      user: userId,
+      _version: 2,
+    });
+
+    const result = await new SyncService().pushData(userId, [
+      {
+        _operationId: 'mixed-success',
+        _entityType: 'category',
+        _id: 'offline-mixed-category',
+        title: 'Created category',
+        icon: 'tag-outline',
+        color: '#3366ff',
+        type: 'outcome',
+        order: 0,
+      },
+      {
+        _operationId: 'mixed-conflict',
+        _entityType: 'expense',
+        _id: existingExpense._id.toString(),
+        _version: 2,
+        _baseVersion: 1,
+        description: 'Stale update',
+        amount: 200,
+        category: category._id,
+        date: new Date(),
+      },
+      {
+        _operationId: 'mixed-failure',
+        _entityType: 'expense',
+        _id: 'offline-mixed-failure',
+        description: 'Missing category',
+        amount: 10,
+        date: new Date().toISOString(),
+      },
+    ]);
+
+    expect(result.processed).toBe(1);
+    expect(result.conflicts).toHaveLength(1);
+    expect(result.errors).toHaveLength(1);
+    expect(await SyncFailure.findOne({ user: userId, operationId: 'mixed-success' })).toBeNull();
+    expect(await SyncFailure.findOne({ user: userId, operationId: 'mixed-conflict' })).toBeNull();
+    expect((await SyncFailure.findOne({ user: userId, operationId: 'mixed-failure' }))?.attemptCount).toBe(1);
+    expect(await Notification.countDocuments({ event: 'sync.repeated_failure' })).toBe(0);
   });
 });
