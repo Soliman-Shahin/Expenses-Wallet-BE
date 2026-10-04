@@ -35,6 +35,167 @@ describe('notification preference foundation', () => {
     ).toBe(true);
   });
 
+  it('atomically preserves concurrent updates across categories', async () => {
+    const userId = new Types.ObjectId().toString();
+
+    const responses = await Promise.all([
+      NotificationPreferenceService.updateForUser(userId, {
+        sync: { push: false },
+      }),
+      NotificationPreferenceService.updateForUser(userId, {
+        subscription: { push: false },
+      }),
+    ]);
+
+    expect(responses).toHaveLength(2);
+    for (const response of responses) {
+      expect(Object.keys(response)).toHaveLength(4);
+      expect(Object.keys(response)).toEqual(
+        expect.arrayContaining([
+        'sync',
+        'subscription',
+        'security',
+        'general',
+        ])
+      );
+    }
+    const result = await NotificationPreferenceService.getForUser(userId);
+    expect(result.sync.push).toBe(false);
+    expect(result.subscription.push).toBe(false);
+    expect(result.sync.inbox).toBe(true);
+    expect(result.sync.realtime).toBe(true);
+    expect(result.subscription.inbox).toBe(true);
+    expect(result.subscription.realtime).toBe(true);
+    expect(result.security).toEqual({ inbox: true, realtime: true, push: true });
+    expect(result.general).toEqual({ inbox: true, realtime: true, push: true });
+    expect(await NotificationPreference.countDocuments({ userId })).toBe(1);
+  });
+
+  it('atomically preserves concurrent updates within one category', async () => {
+    const userId = new Types.ObjectId().toString();
+
+    const responses = await Promise.all([
+      NotificationPreferenceService.updateForUser(userId, {
+        sync: { push: false },
+      }),
+      NotificationPreferenceService.updateForUser(userId, {
+        sync: { realtime: false },
+      }),
+    ]);
+
+    expect(responses).toHaveLength(2);
+    const result = await NotificationPreferenceService.getForUser(userId);
+    expect(result.sync).toEqual({ inbox: true, realtime: false, push: false });
+    expect(await NotificationPreference.countDocuments({ userId })).toBe(1);
+  });
+
+  it('preserves independent concurrent updates on an existing document', async () => {
+    const userId = new Types.ObjectId().toString();
+    await NotificationPreferenceService.updateForUser(userId, {
+      security: { inbox: false },
+    });
+
+    await Promise.all([
+      NotificationPreferenceService.updateForUser(userId, {
+        sync: { push: false },
+      }),
+      NotificationPreferenceService.updateForUser(userId, {
+        subscription: { push: false },
+      }),
+    ]);
+
+    const persisted = await NotificationPreference.findOne({ userId }).lean();
+    expect(persisted?.categories).toEqual({
+      sync: { inbox: true, realtime: true, push: false },
+      subscription: { inbox: true, realtime: true, push: false },
+      security: { inbox: false, realtime: true, push: true },
+      general: { inbox: true, realtime: true, push: true },
+    });
+  });
+
+  it('preserves independent concurrent channel updates on an existing category', async () => {
+    const userId = new Types.ObjectId().toString();
+    await NotificationPreferenceService.updateForUser(userId, {
+      sync: { inbox: false },
+    });
+
+    await Promise.all([
+      NotificationPreferenceService.updateForUser(userId, {
+        sync: { push: false },
+      }),
+      NotificationPreferenceService.updateForUser(userId, {
+        sync: { realtime: false },
+      }),
+    ]);
+
+    const persisted = await NotificationPreference.findOne({ userId }).lean();
+    expect(persisted?.categories.sync).toEqual({
+      inbox: false,
+      realtime: false,
+      push: false,
+    });
+  });
+
+  it('applies multi-field patches while preserving existing custom state', async () => {
+    const userId = new Types.ObjectId().toString();
+    await NotificationPreferenceService.updateForUser(userId, {
+      sync: { inbox: false, push: false },
+      subscription: { realtime: false },
+    });
+
+    const result = await NotificationPreferenceService.updateForUser(userId, {
+      sync: { realtime: false },
+    });
+
+    expect(result).toEqual({
+      sync: { inbox: false, realtime: false, push: false },
+      subscription: { inbox: true, realtime: false, push: true },
+      security: { inbox: true, realtime: true, push: true },
+      general: { inbox: true, realtime: true, push: true },
+    });
+  });
+
+  it('creates complete defaults for a new user with a partial patch', async () => {
+    const userId = new Types.ObjectId().toString();
+
+    const result = await NotificationPreferenceService.updateForUser(userId, {
+      sync: { push: false },
+    });
+
+    expect(result).toEqual({
+      sync: { inbox: true, realtime: true, push: false },
+      subscription: { inbox: true, realtime: true, push: true },
+      security: { inbox: true, realtime: true, push: true },
+      general: { inbox: true, realtime: true, push: true },
+    });
+    expect(
+      await NotificationPreference.countDocuments({ userId })
+    ).toBe(1);
+  });
+
+  it('is idempotent and keeps one preference document per user', async () => {
+    const userId = new Types.ObjectId().toString();
+    const patch = { subscription: { push: false } };
+
+    await NotificationPreferenceService.updateForUser(userId, patch);
+    await NotificationPreferenceService.updateForUser(userId, patch);
+
+    expect((await NotificationPreferenceService.getForUser(userId)).subscription.push).toBe(false);
+    expect(await NotificationPreference.countDocuments({ userId })).toBe(1);
+  });
+
+  it('keeps account preference documents isolated', async () => {
+    const userA = new Types.ObjectId().toString();
+    const userB = new Types.ObjectId().toString();
+
+    await NotificationPreferenceService.updateForUser(userA, {
+      sync: { push: false },
+    });
+
+    expect((await NotificationPreferenceService.getForUser(userB)).sync.push).toBe(true);
+    expect((await NotificationPreferenceService.getForUser(userA)).sync.push).toBe(false);
+  });
+
   it('bypasses optional suppression for mandatory policy', async () => {
     const userId = '507f1f77bcf86cd799439011';
     await NotificationPreferenceService.updateForUser(userId, {
