@@ -15,6 +15,9 @@ const INVALID_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
 ]);
 
+const PUSH_VISIBLE_TITLE = 'Expenses Wallet';
+const PUSH_VISIBLE_BODY = 'You have a new notification.';
+
 export class PushDeliveryService {
   static async sendToUsers(input: {
     userIds: Types.ObjectId[];
@@ -50,8 +53,8 @@ export class PushDeliveryService {
         const response = await messaging.sendEachForMulticast({
           tokens: batch.map((device) => device.token),
           notification: {
-            title: input.title,
-            body: input.message,
+            title: PUSH_VISIBLE_TITLE,
+            body: PUSH_VISIBLE_BODY,
           },
           data: {
             notificationId: input.notificationId,
