@@ -43,19 +43,24 @@ export const verifyAccessToken = async (
 
     const payload = jwt.verify(token, ACCESS_TOKEN_SECRET) as any;
 
-    if (!payload._id) {
+    if (
+      typeof payload._id !== 'string' ||
+      !payload._id ||
+      typeof payload.sid !== 'string' ||
+      !payload.sid
+    ) {
       logger.error('Invalid token payload - missing _id');
       return sendError(
         res,
-        'Invalid token payload',
+        'Invalid or expired access token',
         401,
-        'AUTH_INVALID_PAYLOAD'
+        'AUTH_INVALID_TOKEN'
       );
     }
 
     // Check database to ensure user is not deactivated or deleted
     const userDoc = await User.findById(payload._id)
-      .select('isActive _isDeleted role')
+      .select('isActive _isDeleted role sessions')
       .lean();
 
     if (!userDoc) {
@@ -70,6 +75,19 @@ export const verifyAccessToken = async (
         'Account is inactive or deleted',
         401,
         'AUTH_USER_INACTIVE'
+      );
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const sessionIsValid = userDoc.sessions?.some(
+      (session) => session.sessionId === payload.sid && session.expiresAt > now
+    );
+    if (!sessionIsValid) {
+      return sendError(
+        res,
+        'Invalid or expired access token',
+        401,
+        'AUTH_INVALID_TOKEN'
       );
     }
 

@@ -35,6 +35,12 @@ export const verifySession = async (
     );
 
     if (isSessionValid) {
+      req.sessionId = user.sessions.find(
+        (session: any) =>
+          session.token ===
+            crypto.createHash('sha256').update(refreshToken).digest('hex') &&
+          !User.hasRefreshTokenExpired(session.expiresAt)
+      )?.sessionId;
       next();
     } else {
       throw new Error('Refresh token has expired or the session is invalid');

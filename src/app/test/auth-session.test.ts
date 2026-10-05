@@ -10,11 +10,15 @@ import userRoutes from '../routes/user.route';
 import { advancedEncryptionMiddleware } from '../middleware/encryption-advanced.middleware';
 import { encryptCryptoJS } from '../shared/encryption-cryptojs-compat';
 import logger from '../services/logger.service';
+import { verifyAccessToken } from '../middleware/access.middleware';
 
 const app = express();
 app.use(express.json());
 app.use(advancedEncryptionMiddleware);
 app.use('/v1/user', userRoutes);
+app.get('/v1/protected', verifyAccessToken, (req, res) =>
+  res.json({ userId: (req as any).user_id })
+);
 const hash = (value: string) =>
   crypto.createHash('sha256').update(value).digest('hex');
 async function account() {
@@ -43,26 +47,26 @@ describe('AUTH.1 session contract', () => {
     const { accessToken, refreshToken } = res.body.data;
     const saved = await User.findById(user._id);
     expect(saved!.sessions[0].token).toBe(hash(refreshToken));
+    expect(saved!.sessions[0].sessionId).toEqual(expect.any(String));
     const payload = jwt.verify(
       accessToken,
       process.env.ACCESS_TOKEN_SECRET!
     ) as jwt.JwtPayload;
     expect(payload.exp! - payload.iat!).toBe(3600);
+    expect(payload.sid).toBe(saved!.sessions[0].sessionId);
     expect(res.body.data.user.password).toBeUndefined();
   });
   it('native Google issues the same hashed format and preserves other sessions', async () => {
     const { user, token } = await session();
-    jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          sub: 'test-google-subject',
-          email: user.email,
-          aud: process.env.GOOGLE_WEB_CLIENT_ID,
-          email_verified: true,
-        }),
-      } as any);
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        sub: 'test-google-subject',
+        email: user.email,
+        aud: process.env.GOOGLE_WEB_CLIENT_ID,
+        email_verified: true,
+      }),
+    } as any);
     const res = await request(app)
       .post('/v1/user/auth/google/native')
       .send({ idToken: 'synthetic-google-credential' });
@@ -94,6 +98,15 @@ describe('AUTH.1 session contract', () => {
     expect(
       await UserService.findByRefreshToken(res.body.data.refreshToken)
     ).not.toBeNull();
+    const saved = await User.findOne({ email: 'session@example.test' });
+    const persistedSession = saved!.sessions.find(
+      (item) => item.token === hash(res.body.data.refreshToken)
+    );
+    const payload = jwt.verify(
+      res.body.data.accessToken,
+      process.env.ACCESS_TOKEN_SECRET!
+    ) as jwt.JwtPayload;
+    expect(payload.sid).toBe(persistedSession!.sessionId);
   });
   it('upgrades a pre-AUTH.1 Google credential to a hash on its first renewal', async () => {
     const user = await account();
@@ -113,6 +126,7 @@ describe('AUTH.1 session contract', () => {
     expect(rotated).not.toBeNull();
     const saved = await User.findById(user._id);
     expect(saved!.sessions[0].token).toBe(hash(rotated!.refreshToken));
+    expect(saved!.sessions[0].sessionId).toEqual(expect.any(String));
     expect(await UserService.rotateRefreshToken(legacy)).toBeNull();
   });
   it('allows only one simultaneous rotation', async () => {
@@ -122,6 +136,34 @@ describe('AUTH.1 session contract', () => {
       UserService.rotateRefreshToken(token),
     ]);
     expect(results.filter(Boolean).length).toBe(1);
+  });
+  it('upgrades one legacy session atomically without changing mixed sessions', async () => {
+    const user = await account();
+    const legacy = crypto.randomBytes(64).toString('hex');
+    const other = await user.createSession();
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $push: {
+          sessions: {
+            token: hash(legacy),
+            expiresAt: Math.floor(Date.now() / 1000) + 600,
+          },
+        },
+      }
+    );
+    const results = await Promise.all([
+      UserService.rotateRefreshToken(legacy),
+      UserService.rotateRefreshToken(legacy),
+    ]);
+    expect(results.filter(Boolean)).toHaveLength(1);
+    const saved = await User.findById(user._id);
+    expect(saved!.sessions).toHaveLength(2);
+    expect(saved!.sessions.filter((item) => item.token === hash(other))).toHaveLength(1);
+    const upgraded = saved!.sessions.find((item) => item.token !== hash(other));
+    expect(upgraded?.sessionId).toEqual(expect.any(String));
+    expect(upgraded?.token).toBe(hash(results.find(Boolean)!.refreshToken));
+    expect(await UserService.rotateRefreshToken(legacy)).toBeNull();
   });
   it('rejects invalid, expired and revoked credentials', async () => {
     const { user, token } = await session();
@@ -155,6 +197,97 @@ describe('AUTH.1 session contract', () => {
     expect(res.status).toBe(200);
     expect(await UserService.rotateRefreshToken(token)).toBeNull();
     expect(await UserService.rotateRefreshToken(other)).not.toBeNull();
+  });
+  it('rejects sid-less access tokens under the session-bound policy', async () => {
+    const { user } = await session();
+    const legacy = jwt.sign(
+      { _id: user._id },
+      process.env.ACCESS_TOKEN_SECRET!,
+      {
+        expiresIn: '1h',
+      }
+    );
+    const res = await request(app)
+      .get('/v1/protected')
+      .set('Authorization', `Bearer ${legacy}`);
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('AUTH_INVALID_TOKEN');
+  });
+  it.each([null, '', 42, {}, []])(
+    'rejects malformed sid claim safely: %p',
+    async (sid) => {
+      const { user } = await session();
+      const malformed = jwt.sign(
+        { _id: user._id.toString(), sid },
+        process.env.ACCESS_TOKEN_SECRET!,
+        { expiresIn: '1h' }
+      );
+      const res = await request(app)
+        .get('/v1/protected')
+        .set('Authorization', `Bearer ${malformed}`);
+      expect(res.status).toBe(401);
+      expect(res.body.error.code).toBe('AUTH_INVALID_TOKEN');
+    }
+  );
+  it('rejects malformed user identifiers without a server error', async () => {
+    const malformed = jwt.sign(
+      { _id: { $ne: null }, sid: 'not-a-real-session' },
+      process.env.ACCESS_TOKEN_SECRET!,
+      { expiresIn: '1h' }
+    );
+    const res = await request(app)
+      .get('/v1/protected')
+      .set('Authorization', `Bearer ${malformed}`);
+    expect(res.status).toBe(401);
+  });
+  it('immediately revokes one session access token without affecting another', async () => {
+    const user = await account();
+    const first = await UserService.createAuthenticatedSession(
+      user,
+      'password'
+    );
+    const second = await UserService.createAuthenticatedSession(
+      user,
+      'password'
+    );
+
+    expect(
+      (
+        await request(app)
+          .get('/v1/protected')
+          .set('Authorization', `Bearer ${first.accessToken}`)
+      ).status
+    ).toBe(200);
+    await UserService.revokeRefreshToken(first.refreshToken);
+    expect(
+      (
+        await request(app)
+          .get('/v1/protected')
+          .set('Authorization', `Bearer ${first.accessToken}`)
+      ).status
+    ).toBe(401);
+    expect(
+      (
+        await request(app)
+          .get('/v1/protected')
+          .set('Authorization', `Bearer ${second.accessToken}`)
+      ).status
+    ).toBe(200);
+  });
+  it('rejects access tokens whose persisted session has expired', async () => {
+    const user = await account();
+    const tokens = await UserService.createAuthenticatedSession(
+      user,
+      'password'
+    );
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { 'sessions.0.expiresAt': Math.floor(Date.now() / 1000) - 1 } }
+    );
+    const res = await request(app)
+      .get('/v1/protected')
+      .set('Authorization', `Bearer ${tokens.accessToken}`);
+    expect(res.status).toBe(401);
   });
   it('does not log sensitive payloads, including malformed decrypted JSON', async () => {
     const info = jest.spyOn(logger, 'info');

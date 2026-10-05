@@ -33,8 +33,8 @@ export class UserService {
       | 'biometric'
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const refreshToken = await this.generateRefreshToken();
-    await this.addRefreshToken(user, refreshToken);
-    const accessToken = await this.generateAccessToken(user);
+    const sessionId = await this.addRefreshToken(user, refreshToken);
+    const accessToken = await this.generateAccessToken(user, sessionId);
     const occurredAt = new Date().toISOString();
 
     try {
@@ -84,8 +84,11 @@ export class UserService {
   }
 
   // Generate access token
-  static async generateAccessToken(user: UserDocument): Promise<string> {
-    return jwt.sign({ _id: user._id }, ACCESS_TOKEN_SECRET, {
+  static async generateAccessToken(
+    user: UserDocument,
+    sessionId: string
+  ): Promise<string> {
+    return jwt.sign({ _id: user._id, sid: sessionId }, ACCESS_TOKEN_SECRET, {
       expiresIn: '1h',
       algorithm: 'HS256',
       jwtid: crypto.randomUUID(),
@@ -97,12 +100,17 @@ export class UserService {
     return crypto.randomBytes(64).toString('hex');
   }
 
+  static generateSessionId(): string {
+    return crypto.randomUUID();
+  }
+
   // Add a hashed refresh credential without replacing another device session
   static async addRefreshToken(
     user: UserDocument,
     refreshToken: string
-  ): Promise<void> {
+  ): Promise<string> {
     const hashed = hashToken(refreshToken);
+    const sessionId = this.generateSessionId();
     const expiresAt =
       Math.floor(Date.now() / 1000) + REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60;
     if (user._isDeleted || user.isActive === false)
@@ -118,10 +126,11 @@ export class UserService {
     const result = await User.updateOne(
       { _id: user._id, _isDeleted: { $ne: true }, isActive: { $ne: false } },
       {
-        $push: { sessions: { token: hashed, expiresAt } },
+        $push: { sessions: { sessionId, token: hashed, expiresAt } },
       }
     );
     if (!result.matchedCount) throw new Error('Account unavailable');
+    return sessionId;
   }
 
   // Remove a refresh token (on logout or rotation)
@@ -152,6 +161,7 @@ export class UserService {
     // Read-only compatibility with pre-AUTH.1 Google sessions. Rotation replaces
     // the legacy plaintext value with a hash; no issuance path writes plaintext.
     const nextToken = await this.generateRefreshToken();
+    const nextSessionId = this.generateSessionId();
     const now = Math.floor(Date.now() / 1000);
     const user = await User.findOneAndUpdate(
       {
@@ -164,17 +174,55 @@ export class UserService {
           },
         },
       },
-      {
-        $set: {
-          'sessions.$.token': hashToken(nextToken),
-          'sessions.$.expiresAt': now + REFRESH_TOKEN_EXPIRY_DAYS * 86400,
+      [
+        {
+          $set: {
+            sessions: {
+              $map: {
+                input: '$sessions',
+                as: 'session',
+                in: {
+                  $cond: [
+                    {
+                      $and: [
+                        {
+                          $in: [
+                            '$$session.token',
+                            [hashToken(refreshToken), refreshToken],
+                          ],
+                        },
+                        { $gt: ['$$session.expiresAt', now] },
+                      ],
+                    },
+                    {
+                      $mergeObjects: [
+                        '$$session',
+                        {
+                          sessionId: {
+                            $ifNull: ['$$session.sessionId', nextSessionId],
+                          },
+                          token: hashToken(nextToken),
+                          expiresAt: now + REFRESH_TOKEN_EXPIRY_DAYS * 86400,
+                        },
+                      ],
+                    },
+                    '$$session',
+                  ],
+                },
+              },
+            },
+          },
         },
-      },
-      { returnDocument: 'after' }
+      ],
+      { returnDocument: 'after', updatePipeline: true }
     );
     if (!user) return null;
+    const sessionId = user.sessions.find(
+      (session) => session.token === hashToken(nextToken)
+    )?.sessionId;
+    if (!sessionId) return null;
     return {
-      accessToken: await this.generateAccessToken(user),
+      accessToken: await this.generateAccessToken(user, sessionId),
       refreshToken: nextToken,
     };
   }

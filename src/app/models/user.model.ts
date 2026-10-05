@@ -102,6 +102,7 @@ if (!jwtSecret) {
 }
 
 interface IUserSession {
+  sessionId?: string;
   token: string;
   expiresAt: number;
 }
@@ -201,6 +202,7 @@ const UserSchema = new Schema<UserDocument>(
     },
     sessions: [
       {
+        sessionId: { type: String },
         token: { type: String, required: true },
         expiresAt: { type: Number, required: true },
       },
@@ -253,7 +255,9 @@ UserSchema.methods.generateAccessAuthToken = async function (
   this: UserDocument
 ): Promise<string> {
   const { UserService } = await import('../services/user.service');
-  return UserService.generateAccessToken(this);
+  const sessionId = this.sessions[this.sessions.length - 1]?.sessionId;
+  if (!sessionId) throw new Error('No session identity available');
+  return UserService.generateAccessToken(this, sessionId);
 };
 
 UserSchema.methods.createRefreshToken = async function (): Promise<string> {

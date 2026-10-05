@@ -88,9 +88,9 @@ const signUp = async (req: CustomRequest, res: Response) => {
     });
 
     // Generate tokens
-    const accessToken = await UserService.generateAccessToken(user);
     const refreshToken = await UserService.generateRefreshToken();
-    await UserService.addRefreshToken(user, refreshToken);
+    const sessionId = await UserService.addRefreshToken(user, refreshToken);
+    const accessToken = await UserService.generateAccessToken(user, sessionId);
 
     // Also return tokens in headers for legacy frontend compatibility
     res.setHeader('access-token', accessToken);
@@ -176,7 +176,25 @@ const userAccessToken = async (req: CustomRequest, res: Response) => {
     if (!req.userObject) {
       return sendError(res, 'User not found in request', 401);
     }
-    const accessToken = await UserService.generateAccessToken(req.userObject);
+    const session = req.userObject.sessions.find(
+      (candidate) =>
+        candidate.token ===
+          crypto
+            .createHash('sha256')
+            .update(req.refreshToken || '')
+            .digest('hex') && candidate.sessionId
+    );
+    if (!session?.sessionId)
+      return sendError(
+        res,
+        'Invalid or expired session',
+        401,
+        'SESSION_INVALID'
+      );
+    const accessToken = await UserService.generateAccessToken(
+      req.userObject,
+      session.sessionId
+    );
     // Mirror in header for clients that read headers
     res.setHeader('access-token', accessToken);
     sendSuccess(res, { accessToken }, 'Access token generated successfully');
