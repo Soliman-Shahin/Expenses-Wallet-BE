@@ -8,6 +8,7 @@ import { createServer } from 'http';
 import { initializeSocketService } from './services/socket.service';
 import { validateEncryptionKey } from './config/encryption-config';
 import { subscriptionExpiryReminderJob } from './jobs/subscription-expiry-reminder.job';
+import { notificationArchivalJob } from './jobs/notification-archival.job';
 
 const DEFAULT_PORT = 3000;
 
@@ -62,6 +63,7 @@ async function startServer() {
     httpServer.listen(port, () => {
       logger.info(`[server]: Server is running at http://localhost:${port}`);
       subscriptionExpiryReminderJob.start();
+      notificationArchivalJob.start();
     });
   } catch (error) {
     logger.error('Failed to start server:', error as Error);

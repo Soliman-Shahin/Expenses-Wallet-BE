@@ -5,6 +5,7 @@ export interface UserNotificationDocument extends Document {
   userId: Types.ObjectId;
   readAt?: Date;
   openedAt?: Date;
+  archivedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -19,6 +20,7 @@ const UserNotificationSchema = new Schema<UserNotificationDocument>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     readAt: Date,
     openedAt: Date,
+    archivedAt: Date,
   },
   { timestamps: true }
 );
@@ -27,8 +29,19 @@ UserNotificationSchema.index(
   { notificationId: 1, userId: 1 },
   { unique: true }
 );
-UserNotificationSchema.index({ userId: 1, readAt: 1, createdAt: -1 });
-UserNotificationSchema.index({ userId: 1, createdAt: -1, _id: -1 });
+UserNotificationSchema.index({
+  userId: 1,
+  archivedAt: 1,
+  readAt: 1,
+  createdAt: -1,
+});
+UserNotificationSchema.index({
+  userId: 1,
+  archivedAt: 1,
+  createdAt: -1,
+  _id: -1,
+});
+UserNotificationSchema.index({ archivedAt: 1, createdAt: 1 });
 
 export const UserNotification = model<UserNotificationDocument>(
   'UserNotification',

@@ -114,39 +114,65 @@ export class NotificationService {
   static async listForUser(userId: string, limit = 50, offset = 0) {
     const safeLimit = Math.min(Math.max(limit, 1), 100);
     const safeOffset = Math.max(offset, 0);
-    const rows = await UserNotification.find({
-      userId: new Types.ObjectId(userId),
-    })
-      .sort({ createdAt: -1, _id: -1 })
-      .skip(safeOffset)
-      .limit(safeLimit)
-      .populate({
-        path: 'notificationId',
-        select: 'title message type routeKey event category metadata createdAt',
-      })
-      .lean();
-    const total = await UserNotification.countDocuments({
-      userId: new Types.ObjectId(userId),
-    });
-    const unreadCount = await UserNotification.countDocuments({
-      userId: new Types.ObjectId(userId),
-      readAt: { $exists: false },
-    });
+    const userObjectId = new Types.ObjectId(userId);
+    const [result] = await UserNotification.aggregate([
+      { $match: { userId: userObjectId, archivedAt: { $exists: false } } },
+      {
+        $lookup: {
+          from: 'notifications',
+          localField: 'notificationId',
+          foreignField: '_id',
+          as: 'notification',
+        },
+      },
+      { $unwind: '$notification' },
+      { $sort: { createdAt: -1, _id: -1 } },
+      {
+        $facet: {
+          data: [
+            { $skip: safeOffset },
+            { $limit: safeLimit },
+            {
+              $project: {
+                readAt: 1,
+                notification: {
+                  _id: 1,
+                  title: 1,
+                  message: 1,
+                  type: 1,
+                  routeKey: 1,
+                  event: 1,
+                  category: 1,
+                  metadata: 1,
+                  createdAt: 1,
+                },
+              },
+            },
+          ],
+          totals: [{ $count: 'count' }],
+          unread: [
+            { $match: { readAt: { $exists: false } } },
+            { $count: 'count' },
+          ],
+        },
+      },
+    ]);
+    const rows = result?.data ?? [];
+    const total = result?.totals?.[0]?.count ?? 0;
+    const unreadCount = result?.unread?.[0]?.count ?? 0;
     return {
-      data: rows
-        .filter((row: any) => row.notificationId)
-        .map((row: any) => ({
-          id: row.notificationId._id.toString(),
-          title: row.notificationId.title,
-          message: row.notificationId.message,
-          type: row.notificationId.type,
-          routeKey: row.notificationId.routeKey,
-          event: row.notificationId.event,
-          category: row.notificationId.category,
-          metadata: row.notificationId.metadata,
-          isRead: !!row.readAt,
-          createdAt: row.notificationId.createdAt,
-        })),
+      data: rows.map((row: any) => ({
+        id: row.notification._id.toString(),
+        title: row.notification.title,
+        message: row.notification.message,
+        type: row.notification.type,
+        routeKey: row.notification.routeKey,
+        event: row.notification.event,
+        category: row.notification.category,
+        metadata: row.notification.metadata,
+        isRead: !!row.readAt,
+        createdAt: row.notification.createdAt,
+      })),
       total,
       unreadCount,
       hasMore: safeOffset + rows.length < total,
@@ -275,6 +301,7 @@ export class NotificationService {
       {
         userId: new Types.ObjectId(userId),
         notificationId: new Types.ObjectId(notificationId),
+        archivedAt: { $exists: false },
       },
       { $set: { readAt: new Date(), openedAt: new Date() } }
     );
@@ -283,7 +310,11 @@ export class NotificationService {
 
   static async markAllRead(userId: string) {
     const result = await UserNotification.updateMany(
-      { userId: new Types.ObjectId(userId), readAt: { $exists: false } },
+      {
+        userId: new Types.ObjectId(userId),
+        archivedAt: { $exists: false },
+        readAt: { $exists: false },
+      },
       { $set: { readAt: new Date(), openedAt: new Date() } }
     );
     return { updatedCount: result.modifiedCount };
