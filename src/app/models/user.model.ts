@@ -292,7 +292,7 @@ UserSchema.statics.findByIdAndToken = async function (
 UserSchema.statics.hasRefreshTokenExpired = function (
   expiresAt: number
 ): boolean {
-  return Date.now() / 1000 > expiresAt;
+  return Math.floor(Date.now() / 1000) >= expiresAt;
 };
 
 // Create the user model using generics
