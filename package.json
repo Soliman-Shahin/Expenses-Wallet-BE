@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "expenses-wallet-be",
+  "name": "Madar-Flow-BE",
   "version": "2.0.0",
-  "description": "Secure backend API for Expenses Wallet with advanced encryption and monitoring",
+  "description": "Secure backend API for Madar Flow with advanced encryption and monitoring",
   "main": "app/server.ts",
   "scripts": {
     "test": "jest --detectOpenHandles --forceExit",
@@ -14,7 +14,7 @@
     "seed:admin": "ts-node src/app/scripts/seed-admin.ts",
     "seed:roles": "ts-node src/app/scripts/seed-roles.ts"
   },
-  "author": "Soliman Shahin",
+  "author": "Orbit Madar",
   "license": "ISC",
   "dependencies": {
     "@andresmarpz/favicons": "^1.1.3",

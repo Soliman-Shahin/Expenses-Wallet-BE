@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { DevicePushToken } from '../models/device-push-token.model';
 import logger from './logger.service';
 import { firebaseAdminService } from './firebase-admin.service';
+import { BRAND } from '../config/brand.config';
 
 export interface PushDeliverySummary {
   attempted: number;
@@ -15,7 +16,7 @@ const INVALID_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
 ]);
 
-const PUSH_VISIBLE_TITLE = 'Expenses Wallet';
+const PUSH_VISIBLE_TITLE = BRAND.productName;
 const PUSH_VISIBLE_BODY = 'You have a new notification.';
 
 export class PushDeliveryService {

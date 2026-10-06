@@ -1,4 +1,5 @@
 import swaggerJsdoc from 'swagger-jsdoc';
+import { BRAND } from './brand.config';
 
 /**
  * Swagger/OpenAPI Configuration
@@ -9,12 +10,12 @@ import swaggerJsdoc from 'swagger-jsdoc';
 const swaggerDefinition = {
   openapi: '3.0.0',
   info: {
-    title: 'Expenses Wallet API',
+    title: `${BRAND.productName} API`,
     version: '2.0.0',
     description:
-      'Secure backend API for Expenses Wallet with advanced encryption and monitoring',
+      `Secure backend API for ${BRAND.productName} with advanced encryption and monitoring`,
     contact: {
-      name: 'Soliman Shahin',
+      name: BRAND.companyName,
       email: 'support@expenses-wallet.com',
     },
     license: {

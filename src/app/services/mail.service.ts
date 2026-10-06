@@ -1,4 +1,5 @@
 import logger from './logger.service';
+import { BRAND } from '../config/brand.config';
 
 export class MailService {
   static async sendPasswordReset(email: string, token: string): Promise<void> {
@@ -18,9 +19,9 @@ export class MailService {
       body: JSON.stringify({
         from,
         to: [email],
-        subject: 'Reset your Expenses Wallet password',
-        html: `<p><strong>Expenses Wallet</strong></p><p>We received a request to reset your password.</p><p><a href="${url.toString()}">Reset your password</a></p><p>This link expires in 20 minutes. If you did not request this, you can safely ignore this email.</p>`,
-        text: `Expenses Wallet\n\nReset your password: ${url.toString()}\n\nThis link expires in 20 minutes. If you did not request this, you can safely ignore this email.`,
+        subject: `Reset your ${BRAND.productName} password`,
+        html: `<p><strong>${BRAND.productName}</strong></p><p>We received a request to reset your password.</p><p><a href="${url.toString()}">Reset your password</a></p><p>This link expires in 20 minutes. If you did not request this, you can safely ignore this email.</p>`,
+        text: `${BRAND.productName}\n\nReset your password: ${url.toString()}\n\nThis link expires in 20 minutes. If you did not request this, you can safely ignore this email.`,
       }),
     });
     if (!response.ok) {

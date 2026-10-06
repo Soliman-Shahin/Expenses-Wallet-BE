@@ -55,7 +55,7 @@ describe('PushDeliveryService centralized visible-content privacy', () => {
     expect(sendEachForMulticast).toHaveBeenCalledWith({
       tokens: ['token-1'],
       notification: {
-        title: 'Expenses Wallet',
+        title: 'Madar Flow',
         body: 'You have a new notification.',
       },
       data: {
@@ -122,7 +122,7 @@ describe('PushDeliveryService centralized visible-content privacy', () => {
 
     expect(sendEachForMulticast).toHaveBeenCalledTimes(1);
     expect(sendEachForMulticast.mock.calls[0][0].notification).toEqual({
-      title: 'Expenses Wallet',
+      title: 'Madar Flow',
       body: 'You have a new notification.',
     });
     expect(sendEachForMulticast.mock.calls[0][0].tokens).toEqual([

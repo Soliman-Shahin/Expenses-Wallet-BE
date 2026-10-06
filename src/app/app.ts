@@ -7,6 +7,7 @@ import compression from 'compression';
 import helmet from 'helmet';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.config';
+import { BRAND } from './config/brand.config';
 import { conditionalCsrfProtection } from './middleware/csrf.middleware';
 import routes from './routes';
 import healthRoutes from './routes/health.route';
@@ -84,7 +85,7 @@ function configureExpressApp(): express.Application {
     swaggerUi.serve,
     swaggerUi.setup(swaggerSpec, {
       customCss: '.swagger-ui .topbar { display: none }',
-      customSiteTitle: 'Expenses Wallet API Docs',
+      customSiteTitle: `${BRAND.productName} API Docs`,
     })
   );
 

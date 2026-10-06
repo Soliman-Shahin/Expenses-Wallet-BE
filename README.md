@@ -1,11 +1,11 @@
-# 💰 Expenses Wallet - Backend API
+# 💰 Madar Flow - Backend API
 
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/yourusername/expenses-wallet-be)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/typescript-5.2.2-blue.svg)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
 
-A secure, feature-rich backend API for the Expenses Wallet application with advanced encryption, comprehensive monitoring, and enterprise-grade security features.
+A secure, feature-rich backend API for the Madar Flow application with advanced encryption, comprehensive monitoring, and enterprise-grade security features.
 
 ### Password recovery environment
 
@@ -417,7 +417,7 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 
 ## 👨‍💻 Authors
 
-- **Soliman Shahin** - Original codebase
+- **Orbit Madar** - Original codebase
 - **AI Assistant (Antigravity)** - Security & Performance enhancements
 
 ---
@@ -454,6 +454,6 @@ For bugs and feature requests, please [open an issue](https://github.com/youruse
 
 ---
 
-**Made with ❤️ for Expenses Wallet**
+**Made with ❤️ for Madar Flow**
 
 **Version:** 2.0.0 | **Last Updated:** 2024-11-24
