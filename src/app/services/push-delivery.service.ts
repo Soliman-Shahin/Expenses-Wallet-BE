@@ -65,7 +65,7 @@ export class PushDeliveryService {
           android: {
             priority: 'high',
             notification: {
-              channelId: 'expenses_wallet_general',
+              channelId: 'madar_flow_general',
               tag: input.notificationId,
             },
           },

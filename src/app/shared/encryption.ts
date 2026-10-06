@@ -1,7 +1,7 @@
 import logger from '../services/logger.service';
 import CryptoJS from 'crypto-js';
 
-const KEY = process.env.ENCRYPTION_KEY || 'ExpensesWalletSecretKey2024';
+const KEY = process.env.ENCRYPTION_KEY || 'MadarFlowSecretKey2026';
 
 export const encrypt = (data: any): string => {
   if (!data) return '';

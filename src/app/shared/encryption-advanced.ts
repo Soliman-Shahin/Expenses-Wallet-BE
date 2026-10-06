@@ -29,7 +29,7 @@ function getEncryptionKey(): Buffer {
   if (process.env.NODE_ENV !== 'production') {
     return crypto.pbkdf2Sync(
       'TEMP_TRANSPORT_KEY_FOR_EXCHANGE',
-      'expenses-wallet-salt',
+      'madar-flow-salt',
       100000,
       32,
       'sha256'
@@ -42,7 +42,7 @@ function getEncryptionKey(): Buffer {
   // This matches the Web Crypto API implementation in the frontend
   return crypto.pbkdf2Sync(
     configuredKey,
-    'expenses-wallet-salt',
+    'madar-flow-salt',
     100000, // Iterations
     32, // Key length (32 bytes = 256 bits)
     'sha256' // Digest
