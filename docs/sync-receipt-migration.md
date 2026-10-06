@@ -16,7 +16,7 @@ requiring this migration; a clean database needs no legacy cleanup.
 
 ## Command
 
-From `Expenses-Wallet-BE/`, with `MONGO_URI` set in the execution
+From `Madar-Flow-BE/`, with `MONGO_URI` set in the execution
 environment (without committing it), run:
 
 ```text

@@ -1,6 +1,6 @@
 # 💰 Madar Flow - Backend API
 
-[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/yourusername/expenses-wallet-be)
+[![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](https://github.com/Soliman-Shahin/Madar-Flow-BE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/typescript-5.2.2-blue.svg)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-ISC-blue.svg)](LICENSE)
@@ -67,7 +67,7 @@ Configure `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, and `PASSWORD_RESET_URL` in the
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/expenses-wallet-be.git
+git clone https://github.com/Soliman-Shahin/Madar-Flow-BE.git
 
 # Install dependencies
 npm install
@@ -433,7 +433,7 @@ This project is licensed under the ISC License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-For bugs and feature requests, please [open an issue](https://github.com/yourusername/expenses-wallet-be/issues).
+For bugs and feature requests, please [open an issue](https://github.com/Soliman-Shahin/Madar-Flow-BE/issues).
 
 ---
 
