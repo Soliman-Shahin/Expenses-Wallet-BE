@@ -17,14 +17,13 @@ import logger from '../services/logger.service';
 
 config();
 
-const MONGODB_URI =
-  process.env.MONGODB_URI || 'mongodb://localhost:27017/expenses-wallet';
-
 async function seedPlans() {
   try {
+    const MONGO_URI = process.env.MONGO_URI;
+    if (!MONGO_URI) throw new Error('MONGO_URI must be defined');
     // Connect to MongoDB
     logger.info('Connecting to MongoDB...');
-    await mongoose.connect(MONGODB_URI);
+    await mongoose.connect(MONGO_URI);
     logger.info('Connected to MongoDB successfully');
 
     // Seed default plans

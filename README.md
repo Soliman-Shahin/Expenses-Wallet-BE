@@ -116,7 +116,7 @@ Create a `.env` file based on `.env.example`:
 
 ```env
 # Database
-MONGO_URI=mongodb://localhost:27017/expenses-wallet
+MONGO_URI=mongodb://localhost:27017/madar-flow
 
 # JWT & Authentication
 JWT_SECRET=your_jwt_secret

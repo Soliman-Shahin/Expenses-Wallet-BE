@@ -3,9 +3,10 @@ import { config } from 'dotenv';
 
 config();
 
-const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/expenses-wallet';
-
 async function migrateSyncReceipts(): Promise<void> {
+  const uri = process.env.MONGO_URI;
+  if (!uri) throw new Error('MONGO_URI must be defined');
+
   await mongoose.connect(uri);
   const db = mongoose.connection.db;
   if (!db) throw new Error('MongoDB connection is not ready');
